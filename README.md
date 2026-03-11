@@ -1,5 +1,7 @@
 <div align="center">
 
+![SecurePad](img/logo-securepad-azul3-250.png)
+
 # 🔐 SecurePad
 
 **Editor de texto cifrado. Sin servidores. Sin compromisos.**
@@ -58,10 +60,11 @@ La mayoría de gestores de contraseñas dependen de servidores en la nube, suscr
 
 ### 🖥️ Interfaz
 
+- **Bypass de Semilla (Nuevo)** — Permite guardar documentos en la misma sesión original sin requerir re-ingreso de Frase Semilla, preservando la inyección master actual evitando errores de escritura.
 - **Dark mode** por defecto con opción Light mode
 - **Auto-lock** a los 10 minutos de inactividad
 - **En Android**: contenido oculto al minimizar + bloqueo de capturas de pantalla (`FLAG_SECURE`)
-- **Buscar y Reemplazar** con barra retráctil (`Ctrl+F`)
+- **Buscar y Reemplazar** con barra retráctil (`Ctrl+F` y auto-sync)
 - **Fuente configurable**: tamaño y familia (monoespaciada por defecto)
 - **Sin usuario, sin registro** — solo una contraseña maestra por archivo
 

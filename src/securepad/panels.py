@@ -70,12 +70,12 @@ def build_panel_setup(*, page: ft.Page, on_verified, S: dict):
             ft.Container(height=16),
             words_col,
             ft.Container(height=24),
-            ft.ElevatedButton(
+            ft.FilledButton(
                 "Ya las guardé, continuar →", on_click=_to_step2,
                 style=ft.ButtonStyle(
                     bgcolor=DARK["accent"], color=white(),
                     shape=ft.RoundedRectangleBorder(radius=8),
-                    padding=ft.padding.symmetric(horizontal=24, vertical=12),
+                    padding=ft.Padding(left=24, right=24, top=12, bottom=12),
                 ),
             ),
         ],
@@ -95,12 +95,12 @@ def build_panel_setup(*, page: ft.Page, on_verified, S: dict):
             ft.Container(height=8),
             confirm_err,
             ft.Container(height=16),
-            ft.ElevatedButton(
+            ft.FilledButton(
                 "Verificar y comenzar", on_click=_verify,
                 style=ft.ButtonStyle(
                     bgcolor=DARK["success"], color=white(),
                     shape=ft.RoundedRectangleBorder(radius=8),
-                    padding=ft.padding.symmetric(horizontal=24, vertical=12),
+                    padding=ft.Padding(left=24, right=24, top=12, bottom=12),
                 ),
             ),
         ],
@@ -111,7 +111,7 @@ def build_panel_setup(*, page: ft.Page, on_verified, S: dict):
         controls=[
             ft.Container(
                 expand=True,
-                padding=ft.padding.symmetric(horizontal=40, vertical=30),
+                padding=ft.Padding(left=40, right=40, top=30, bottom=30),
                 bgcolor=DARK["bg"],
                 content=ft.Column(
                     scroll=ft.ScrollMode.AUTO,
@@ -179,7 +179,7 @@ def build_panel_editor(
             icon_color=color or DARK["text"], icon_size=18,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=5),
-                padding=ft.padding.all(5),
+                padding=ft.Padding(left=5, right=5, top=5, bottom=5),
             ),
         )
 
@@ -198,8 +198,8 @@ def build_panel_editor(
             _icon_btn("LOCK_OUTLINED",        "Bloquear  Ctrl+L", on_lock, DARK["danger"]),
         ], spacing=2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         bgcolor=DARK["panel"],
-        padding=ft.padding.symmetric(horizontal=10, vertical=5),
-        border=ft.border.only(bottom=ft.BorderSide(1, DARK["border"])),
+        padding=ft.Padding(left=10, right=10, top=5, bottom=5),
+        border=ft.Border(bottom=ft.BorderSide(1, DARK["border"])),
     )
 
     # ── Find bar ──────────────────────────────────────────────────────────
@@ -218,20 +218,19 @@ def build_panel_editor(
                 ft.IconButton(icon("CLOSE"), on_click=on_toggle_find, icon_size=14),
             ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             bgcolor=DARK["panel"],
-            padding=ft.padding.symmetric(horizontal=10, vertical=2),
-            border=ft.border.only(bottom=ft.BorderSide(1, DARK["border"])),
+            padding=ft.Padding(left=10, right=10, top=2, bottom=2),
+            border=ft.Border(bottom=ft.BorderSide(1, DARK["border"])),
         ),
     )
 
     # ── Área de edición: números + editor ─────────────────────────────────
     #
-    # CLAVE para alineación: lineno_col y editor comparten:
-    #   · font_family = FONT_MONO
-    #   · size        = S["font_sz"]  (actualizado por _update_editor_style)
-    #   · height      = LINE_H        (multiplicador de altura de línea)
-    #   · StrutStyle con force_strut_height=True en el editor
+    # CLAVE para alineación sin scroll asíncrono y Flet 0.82+:
+    #   · Se elimina GestureDetector porque 'editor' ahora tiene min_lines=N.
+    #   · Crecen sus Heights unificadamente en el DOM.
+    #   · editor_area_scroll es la encargada pura del desvío vertical.
     #
-    editor_area = ft.Row(
+    editor_row = ft.Row(
         expand=True, spacing=0,
         vertical_alignment=ft.CrossAxisAlignment.START,
         controls=[
@@ -241,23 +240,25 @@ def build_panel_editor(
                 content=lineno_col,
                 bgcolor=DARK["lineno_bg"],
                 width=50,
-                padding=ft.padding.only(top=16, bottom=16, left=6, right=8),
-                border=ft.border.only(right=ft.BorderSide(1, DARK["border"])),
+                padding=ft.Padding(top=16, bottom=16, left=6, right=8),
+                border=ft.Border(right=ft.BorderSide(1, DARK["border"])),
                 clip_behavior=ft.ClipBehavior.HARD_EDGE,
             ),
-            # Editor con captura de scroll para sincronizar lineno_col
+            # Editor con min_lines
             ft.Container(
                 ref=r_editor_container,
                 expand=True,
                 bgcolor=DARK["surface"],
-                padding=ft.padding.only(top=16, bottom=16, left=12, right=16),
-                content=ft.GestureDetector(
-                    content=editor,
-                    on_scroll=on_editor_scroll,
-                    expand=True,
-                ),
+                padding=ft.Padding(top=16, bottom=16, left=12, right=16),
+                content=editor,
             ),
         ],
+    )
+
+    editor_area = ft.Column(
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+        controls=[editor_row],
     )
 
     editor_col = ft.Column(
@@ -287,14 +288,13 @@ def build_panel_editor(
                             pwd_field, ft.Container(height=4), pwd_err,
                             ft.Container(height=14),
                             ft.Row([
-                                ft.ElevatedButton(
+                                ft.FilledButton(
                                     "Desbloquear", icon=icon("LOCK_OPEN_OUTLINED"),
                                     on_click=on_unlock,
                                     style=ft.ButtonStyle(
                                         bgcolor=DARK["accent"], color=white(),
                                         shape=ft.RoundedRectangleBorder(radius=8),
-                                        padding=ft.padding.symmetric(
-                                            horizontal=22, vertical=11),
+                                        padding=ft.Padding(left=22, right=22, top=11, bottom=11),
                                     ),
                                 ),
                             ], alignment=ft.MainAxisAlignment.CENTER),
@@ -305,13 +305,16 @@ def build_panel_editor(
                             ], alignment=ft.MainAxisAlignment.CENTER),
                             ft.Row([
                                 ft.TextButton("Reinserción de Semilla", on_click=on_reinsert_seed, style=ft.ButtonStyle(color=DARK["accent"])),
-                                ft.TextButton("Remover Semilla / Reset", on_click=on_reset_seed, style=ft.ButtonStyle(color=DARK["danger"])),
+                                ft.TextButton("Reset Semilla", on_click=on_reset_seed, style=ft.ButtonStyle(color=DARK["danger"])),
                             ], alignment=ft.MainAxisAlignment.CENTER),
                         ],
                     ),
                     width=370, bgcolor=DARK["surface"], border_radius=12,
-                    padding=ft.padding.all(26),
-                    border=ft.border.all(1, DARK["border"]),
+                    padding=ft.Padding(left=26, right=26, top=26, bottom=26),
+                    border=ft.Border(
+                        top=ft.BorderSide(1, DARK["border"]), bottom=ft.BorderSide(1, DARK["border"]),
+                        left=ft.BorderSide(1, DARK["border"]), right=ft.BorderSide(1, DARK["border"])
+                    ),
                 ),
             ],
         ),
@@ -329,8 +332,8 @@ def build_panel_editor(
             ft.Text("AES-256-GCM · PBKDF2-200K", size=10, color=DARK["muted"]),
         ]),
         bgcolor=DARK["panel"],
-        padding=ft.padding.symmetric(horizontal=12, vertical=4),
-        border=ft.border.only(top=ft.BorderSide(1, DARK["border"])),
+        padding=ft.Padding(left=12, right=12, top=4, bottom=4),
+        border=ft.Border(top=ft.BorderSide(1, DARK["border"])),
     )
 
     # ── Ensamblado final ──────────────────────────────────────────────────

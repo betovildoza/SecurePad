@@ -158,7 +158,7 @@ async def main(page: ft.Page):
     # Controles del editor
     # ─────────────────────────────────────────────────────────────────────
     editor = ft.TextField(
-        multiline=True, expand=True,
+        multiline=True, min_lines=1, expand=True,
         content_padding=0,
         border=ft.InputBorder.NONE,
         cursor_color=DARK["cursor"],
@@ -166,13 +166,13 @@ async def main(page: ft.Page):
         text_style=text_style(DARK["text"], FONT_SZ),
         strut_style=strut(FONT_SZ),
         bgcolor="transparent",
+        on_change=lambda e: _sync_linenos(e.control.value),
     )
 
-    lineno_col = ft.Column(
-        scroll=ft.ScrollMode.HIDDEN, spacing=0,
-        controls=[ft.Text("1", font_family=FONT_MONO, size=FONT_SZ,
-                          color=DARK["lineno"], height=LINE_H,
-                          text_align=ft.TextAlign.RIGHT, no_wrap=True)],
+    lineno_col = ft.Text(
+        "1", font_family=FONT_MONO, size=FONT_SZ,
+        color=DARK["lineno"], height=LINE_H,
+        text_align=ft.TextAlign.RIGHT, no_wrap=True
     )
 
     status_txt = ft.Text("", size=11, color=DARK["muted"])
@@ -190,33 +190,32 @@ async def main(page: ft.Page):
                         color=DARK["text"])
     pwd_hint  = ft.Text("", size=11, color=DARK["muted"])
 
-    find_f    = ft.TextField(label="Buscar",     dense=True, width=190,
-                             text_style=text_style(DARK["text"], 13))
-    replace_f = ft.TextField(label="Reemplazar", dense=True, width=190,
-                             text_style=text_style(DARK["text"], 13))
+    find_f    = ft.TextField(label="Buscar",     dense=True, width=190, label_style=ft.TextStyle(color=DARK["muted"]))
+    replace_f = ft.TextField(label="Reemplazar", dense=True, width=190, label_style=ft.TextStyle(color=DARK["muted"]))
     find_msg  = ft.Text("", size=11, color=DARK["muted"])
 
     # ─────────────────────────────────────────────────────────────────────
     # 1. _update_editor_style — sincroniza fuente + altura en todos los sitios
     # ─────────────────────────────────────────────────────────────────────
     def _update_editor_style():
+        fam = S.get("font_family", FONT_MONO)
         sz  = S["font_sz"]
         col = _C("text")
         # TextField: text_style + strut_style deben moverse juntos
         editor.text_style  = ft.TextStyle(
-            font_family=FONT_MONO, size=sz, color=col, height=LINE_H,
+            font_family=fam, size=sz, color=col, height=LINE_H,
         )
         editor.strut_style = ft.StrutStyle(
-            font_family=FONT_MONO, size=sz,
+            font_family=fam, size=sz,
             height=LINE_H, force_strut_height=True,
         )
         editor.cursor_color = _C("cursor")
         editor.selection_color = _C("accent")
-        # Números de línea: mismo size y height que el editor
-        for ln in lineno_col.controls:
-            ln.size   = sz
-            ln.color  = _C("lineno")
-            ln.height = LINE_H
+        # Números de línea: mismo size y height
+        lineno_col.font_family = fam
+        lineno_col.size   = sz
+        lineno_col.color  = _C("lineno")
+        lineno_col.height = LINE_H
 
     # ─────────────────────────────────────────────────────────────────────
     # 3. _apply_theme — actualiza bgcolor/border de contenedores principales
@@ -227,7 +226,7 @@ async def main(page: ft.Page):
 
         if r_toolbar.current:
             r_toolbar.current.bgcolor = T["panel"]
-            r_toolbar.current.border  = ft.border.only(
+            r_toolbar.current.border  = ft.Border(
                 bottom=ft.BorderSide(1, T["border"]))
             
             # Actualizar color de iconos en toolbar
@@ -239,28 +238,39 @@ async def main(page: ft.Page):
                     else:
                         c.icon_color = T["text"]
 
+        if r_findbar_inner.current:
+            r_findbar_inner.current.bgcolor = T["panel"]
+            r_findbar_inner.current.border  = ft.Border(
+                bottom=ft.BorderSide(1, T["border"]))
+            # Actualizar color de iconos en findbar
+            row_controls = r_findbar_inner.current.content.controls
+            for c in row_controls:
+                if isinstance(c, ft.Row):
+                    for sub_c in c.controls:
+                        if isinstance(sub_c, ft.IconButton):
+                            sub_c.icon_color = T["text"]
+                elif isinstance(c, ft.IconButton):
+                    c.icon_color = T["text"]
+
         if r_editor_container.current:
             r_editor_container.current.bgcolor = T["surface"]
 
         if r_lineno_container.current:
             r_lineno_container.current.bgcolor = T["lineno_bg"]
-            r_lineno_container.current.border  = ft.border.only(
+            r_lineno_container.current.border  = ft.Border(
                 right=ft.BorderSide(1, T["border"]))
 
         if r_status_bar.current:
             r_status_bar.current.bgcolor = T["panel"]
-            r_status_bar.current.border  = ft.border.only(
+            r_status_bar.current.border  = ft.Border(
                 top=ft.BorderSide(1, T["border"]))
-
-        if r_findbar_inner.current:
-            r_findbar_inner.current.bgcolor = T["panel"]
-            r_findbar_inner.current.border  = ft.border.only(
-                bottom=ft.BorderSide(1, T["border"]))
 
         find_f.bgcolor = T["surface"]
         replace_f.bgcolor = T["surface"]
-        find_f.text_style.color = T["text"]
-        replace_f.text_style.color = T["text"]
+        find_f.color = T["text"]
+        replace_f.color = T["text"]
+        find_f.label_style = ft.TextStyle(color=T["muted"])
+        replace_f.label_style = ft.TextStyle(color=T["muted"])
         title_txt.color  = T["text"]
         status_txt.color = T["muted"]
         cursor_txt.color = T["muted"]
@@ -291,14 +301,10 @@ async def main(page: ft.Page):
             _update_title()
 
     def _sync_linenos(text: str):
-        sz = S["font_sz"]
         n  = max(1, text.count("\n") + 1) if text else 1
-        lineno_col.controls = [
-            ft.Text(str(i + 1), font_family=FONT_MONO, size=sz,
-                    color=_C("lineno"), height=LINE_H,
-                    text_align=ft.TextAlign.RIGHT, no_wrap=True)
-            for i in range(n)
-        ]
+        # Generar un solo string con saltos de línea escalares
+        lineno_col.value = "\n".join(str(i + 1) for i in range(n))
+        editor.min_lines = n
         page.update()
 
     def _update_cursor(text, offset):
@@ -428,8 +434,8 @@ async def main(page: ft.Page):
                 sf, err_t,
             ], tight=True, width=440),
             actions=[
-                ft.TextButton("Inyectar", on_click=_ok),
-                ft.TextButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set())),
+                ft.FilledButton("Inyectar", on_click=_ok, bgcolor=DARK["accent"], color=white()),
+                ft.FilledButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set()), bgcolor=DARK["panel"], color=DARK["text"]),
             ],
         ))
         await done.wait()
@@ -457,9 +463,8 @@ async def main(page: ft.Page):
                                 "manualmente la semilla correcta de estos.",
                                 size=13, color=DARK["muted"]),
                 actions=[
-                    ft.TextButton("Borrar Todo", on_click=_confirm_final,
-                                  style=ft.ButtonStyle(color=DARK["danger"])),
-                    ft.TextButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set())),
+                    ft.FilledButton("Borrar Todo", on_click=_confirm_final, bgcolor=DARK["danger"], color=white()),
+                    ft.FilledButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set()), bgcolor=DARK["panel"], color=DARK["text"]),
                 ],
             ))
 
@@ -468,9 +473,8 @@ async def main(page: ft.Page):
             content=ft.Text("¿Estás seguro que deseas remover tu semilla almacenada y "
                             "resetear la aplicación a estado de fábrica?", size=13),
             actions=[
-                ft.TextButton("Sí, Remover", on_click=_confirm_first,
-                              style=ft.ButtonStyle(color=DARK["danger"])),
-                ft.TextButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set())),
+                ft.FilledButton("Sí, Remover", on_click=_confirm_first, bgcolor=DARK["danger"], color=white()),
+                ft.FilledButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set()), bgcolor=DARK["panel"], color=DARK["text"]),
             ],
         ))
         await done.wait()
@@ -528,6 +532,8 @@ async def main(page: ft.Page):
         S.update({"current_file": None, "file_bytes": None,
                   "unlocked": False, "dirty": False})
         editor.value = ""; pwd_field.value = ""; pwd_err.value = ""
+        if r_findbar.current: r_findbar.current.visible = False
+        find_f.value = ""; find_msg.value = ""; S["find_idx"] = 0
         pwd_title.value = "Nueva nota"
         pwd_hint.value  = "Elige una contraseña para cifrar este archivo."
         _show_lock(); _update_title()
@@ -548,6 +554,8 @@ async def main(page: ft.Page):
             S.update({"current_file": path, "file_bytes": raw,
                       "unlocked": False, "dirty": False})
             editor.value = ""; pwd_field.value = ""; pwd_err.value = ""
+            if r_findbar.current: r_findbar.current.visible = False
+            find_f.value = ""; find_msg.value = ""; S["find_idx"] = 0
             pwd_title.value = f"Abrir: {os.path.basename(path)}"
             pwd_hint.value  = "Ingresa la contraseña maestra."
             _show_lock(); _update_title()
@@ -593,8 +601,8 @@ async def main(page: ft.Page):
             modal=True, title=ft.Text("Guardar archivo"),
             content=ft.Column([ft.Text("Contraseña para cifrar:"), spf, serr], tight=True),
             actions=[
-                ft.TextButton("Guardar",  on_click=_confirm),
-                ft.TextButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set())),
+                ft.FilledButton("Guardar",  on_click=_confirm, bgcolor=DARK["accent"], color=white()),
+                ft.FilledButton("Cancelar", on_click=lambda e: (close_dlg(page), done.set()), bgcolor=DARK["panel"], color=DARK["text"]),
             ],
         ))
         await done.wait()
@@ -604,9 +612,11 @@ async def main(page: ft.Page):
 
     async def _execute_save(path: str, password: str):
         seed = S.get("seed_phrase")
-        if not seed:
+        if not seed and not S.get("setup_done", False):
             seed = await _ask_seed_for_save()
             if not seed: return
+        if seed is None:
+            seed = ""
         try:
             _set_status("Cifrando…"); page.update()
             loop = asyncio.get_event_loop()
@@ -696,6 +706,7 @@ async def main(page: ft.Page):
         editor.selection = ft.TextSelection(pos, pos + len(needle))
         
         S["find_idx"] = (S["find_idx"] + 1) % len(positions)
+        editor.update()
         page.update()
 
     def _do_replace(e=None):
@@ -751,7 +762,7 @@ async def main(page: ft.Page):
                 page.update()
                 # Focus workaround delay Flet 0.82
                 await asyncio.sleep(0.1)
-                find_f.focus()
+                await find_f.focus()
             else:
                 page.update()
 
@@ -765,8 +776,19 @@ async def main(page: ft.Page):
         font_sz_sl = ft.Slider(min=10, max=28, value=float(S["font_sz"]),
                                divisions=18, label="{value}")
         dark_sw = ft.Switch(label="Modo oscuro", value=S["dark"])
+        
+        fonts = ["Consolas", "Courier New", "Lucida Console", "Monospace", "Arial", "Roboto"]
+        current_font = S.get("font_family", FONT_MONO)
+        if current_font not in fonts: fonts.insert(0, current_font)
+        font_dd = ft.Dropdown(
+            label="Fuente",
+            value=current_font,
+            options=[ft.dropdown.Option(f) for f in fonts],
+            width=280
+        )
 
         def _apply(e):
+            S["font_family"] = font_dd.value
             S["font_sz"] = int(font_sz_sl.value)
             S["dark"]    = dark_sw.value
             _apply_theme()          # actualiza bgcolor/borders
@@ -777,12 +799,13 @@ async def main(page: ft.Page):
         open_dlg(page, ft.AlertDialog(
             modal=True, title=ft.Text("Ajustes"),
             content=ft.Column([
+                font_dd,
                 ft.Text("Tamaño de fuente", size=13, color=DARK["muted"]),
                 font_sz_sl, dark_sw,
             ], tight=True, width=300),
             actions=[
-                ft.TextButton("Aplicar",  on_click=_apply),
-                ft.TextButton("Cancelar", on_click=lambda e: close_dlg(page)),
+                ft.FilledButton("Aplicar",  on_click=_apply, bgcolor=DARK["accent"], color=white()),
+                ft.FilledButton("Cancelar", on_click=lambda e: close_dlg(page), bgcolor=DARK["panel"], color=DARK["text"]),
             ],
         ))
 
@@ -795,7 +818,7 @@ async def main(page: ft.Page):
             if   e.key == "S": await _save()
             elif e.key == "O": await _open_file()
             elif e.key == "N": await _new_file()
-            elif e.key == "F": _toggle_find()
+            elif e.key == "F": await _toggle_find()
             elif e.key == "L": await _do_lock()
 
     page.on_keyboard_event = _on_kbd
@@ -817,10 +840,7 @@ async def main(page: ft.Page):
     # Scroll del editor → sincroniza lineno_col
     # ─────────────────────────────────────────────────────────────────────
     def _on_editor_scroll(e):
-        if not S["unlocked"]: return
-        S["scroll_px"] = max(0.0, S["scroll_px"] + (e.scroll_delta.y * 20))
-        lineno_col.scroll_to(offset=S["scroll_px"], duration=0)
-        page.update()
+        pass
 
     # ─────────────────────────────────────────────────────────────────────
     # Navegación: swap de paneles
@@ -896,18 +916,6 @@ async def main(page: ft.Page):
         r_lineno_container=r_lineno_container,
         r_status_bar=r_status_bar,
         r_findbar_inner=r_findbar_inner,
-    )
-
-    # ─────────────────────────────────────────────────────────────────────
-    # FAB
-    # ─────────────────────────────────────────────────────────────────────
-    page.floating_action_button = ft.FloatingActionButton(
-        icon=icon("ADD"), mini=True,
-        bgcolor=DARK["accent"], foreground_color=white(),
-        on_click=_new_file, tooltip="Nueva nota",
-    )
-    page.floating_action_button_location = (
-        ft.FloatingActionButtonLocation.MINI_END_TOP
     )
 
     # ─────────────────────────────────────────────────────────────────────
