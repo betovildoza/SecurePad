@@ -1,76 +1,88 @@
 """
-SecurePad - Crypto Engine
-========================
-AES-256-GCM + PBKDF2-SHA256 (200,000 iterations)
-Secure memory wipe after key use.
+SecurePad - Crypto Engine v2
+=============================
+Cambios v2:
+  - Sistema de semilla mnemónica (12 palabras BIP-39) reemplaza archivos .key
+  - La clave maestra se deriva de: password + salt (flujo normal)
+  - Recuperación: seed_phrase -> master_key_bytes (sin contraseña)
+  - Archivo .spd ahora incluye recovery_blob: clave maestra cifrada bajo la seed
+  - Sin dependencias de archivos externos para recuperación
 
-File Format (.spd):
-┌─────────────────────────────────────────┐
-│  MAGIC     (8 bytes)  "SPAD\x01\x00\x00\x00"
-│  VERSION   (2 bytes)  uint16 LE
-│  KEY_ID    (16 bytes) random UUID bytes
-│  SALT      (32 bytes) random salt
-│  IV/NONCE  (12 bytes) AES-GCM nonce
-│  TAG       (16 bytes) AES-GCM auth tag
-│  CT_LEN    (8 bytes)  uint64 LE ciphertext length
-│  CIPHERTEXT (N bytes) encrypted UTF-8 content
-└─────────────────────────────────────────┘
-
-Key File (.key):
-┌─────────────────────────────────────────┐
-│  MAGIC     (8 bytes)  "SPKY\x01\x00\x00\x00"
-│  KEY_ID    (16 bytes) matches .spd KEY_ID
-│  MASTER_KEY(32 bytes) raw AES-256 key (encrypted with recovery_key)
-│  REC_SALT  (32 bytes) salt for recovery key derivation
-│  REC_IV    (12 bytes) nonce for recovery key encryption
-│  REC_TAG   (16 bytes) tag for recovery key encryption
-│  REC_CT    (32 bytes) encrypted master key bytes
-└─────────────────────────────────────────┘
+Formato .spd v2:
+┌──────────────────────────────────────────────────────────┐
+│  MAGIC       8B   "SPAD\x02\x00\x00\x00"
+│  VERSION     2B   uint16 LE = 2
+│  KEY_ID      16B  UUID aleatorio
+│  SALT        32B  salt para PBKDF2 (password -> key)
+│  NONCE       12B  AES-GCM nonce (ciphertext)
+│  TAG         16B  AES-GCM auth tag (ciphertext)
+│  REC_SALT    32B  salt para PBKDF2 (seed -> recovery_key)
+│  REC_NONCE   12B  nonce para recovery_blob
+│  REC_TAG     16B  tag para recovery_blob
+│  CT_LEN       8B  uint64 LE longitud ciphertext
+│  CIPHERTEXT   NB  texto cifrado
+│  REC_BLOB    32B  master_key cifrada bajo recovery_key (derivada de seed)
+└──────────────────────────────────────────────────────────┘
 """
 
 import os
 import struct
 import secrets
 import ctypes
-from typing import Optional, Tuple
+import hashlib
+from typing import Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidTag
+from mnemonic import Mnemonic
 
-# ──────────────────────────────────────────────────────────
-# Constants
-# ──────────────────────────────────────────────────────────
-MAGIC_SPD   = b"SPAD\x01\x00\x00\x00"   # .spd file magic
-MAGIC_KEY   = b"SPKY\x01\x00\x00\x00"   # .key file magic
-VERSION     = 1
+# ── Constantes ────────────────────────────────────────────────────────────────
+MAGIC_V2    = b"SPAD\x02\x00\x00\x00"
+VERSION     = 2
 KDF_ITERS   = 200_000
 SALT_LEN    = 32
 IV_LEN      = 12
 TAG_LEN     = 16
-KEY_LEN     = 32    # AES-256
+KEY_LEN     = 32
 KEY_ID_LEN  = 16
 
+# Offsets en el header (para parseo directo)
+OFF_MAGIC       = 0
+OFF_VERSION     = 8
+OFF_KEY_ID      = 10
+OFF_SALT        = 26
+OFF_NONCE       = 58
+OFF_TAG         = 70
+OFF_REC_SALT    = 86
+OFF_REC_NONCE   = 118
+OFF_REC_TAG     = 130
+OFF_CT_LEN      = 146
+OFF_CT          = 154
+# REC_BLOB está al final: OFF_CT + ct_len
 
-# ──────────────────────────────────────────────────────────
-# Secure memory wipe
-# ──────────────────────────────────────────────────────────
+HEADER_FIXED_SIZE = OFF_CT  # 154 bytes de header fijo
+
+
+# ── Limpieza de memoria ───────────────────────────────────────────────────────
 def secure_wipe(data: bytearray) -> None:
-    """Overwrite a bytearray with zeros in-place, then del it."""
-    if isinstance(data, bytearray):
-        for i in range(len(data)):
-            data[i] = 0
-        # Second pass via ctypes to fight optimizer
-        try:
-            ctypes.memset(ctypes.addressof(
-                (ctypes.c_char * len(data)).from_buffer(data)), 0, len(data))
-        except Exception:
-            pass
+    """Sobreescribe un bytearray con ceros usando ctypes para evitar optimizaciones."""
+    if not isinstance(data, bytearray) or len(data) == 0:
+        return
+    for i in range(len(data)):
+        data[i] = 0
+    try:
+        ctypes.memset(
+            ctypes.addressof((ctypes.c_char * len(data)).from_buffer(data)),
+            0, len(data)
+        )
+    except Exception:
+        pass
 
 
 def secure_wipe_str(s: str) -> None:
-    """Best-effort wipe of a Python str (limited by immutability)."""
+    """Best-effort wipe de un str Python (limitado por inmutabilidad)."""
     try:
         ba = bytearray(s.encode("utf-8"))
         secure_wipe(ba)
@@ -78,235 +90,258 @@ def secure_wipe_str(s: str) -> None:
         pass
 
 
-# ──────────────────────────────────────────────────────────
-# Key Derivation
-# ──────────────────────────────────────────────────────────
-def derive_key(password: str, salt: bytes) -> bytearray:
+# ── Mnemónica (BIP-39, 12 palabras) ──────────────────────────────────────────
+_mnemo = Mnemonic("english")
+
+
+def generate_seed_phrase() -> str:
+    """Genera 12 palabras BIP-39 aleatorias (128 bits de entropía)."""
+    return _mnemo.generate(strength=128)
+
+
+def validate_seed_phrase(phrase: str) -> bool:
+    """Retorna True si la frase es BIP-39 válida."""
+    try:
+        return _mnemo.check(phrase.strip().lower())
+    except Exception:
+        return False
+
+
+def seed_phrase_to_key(phrase: str, salt: bytes) -> bytearray:
     """
-    Derive AES-256 key from password using PBKDF2-HMAC-SHA256.
-    Returns a bytearray so it can be securely wiped.
+    Deriva una clave AES-256 a partir de la semilla mnemónica.
+    Usa PBKDF2 con la semilla como 'contraseña' para que el salt del archivo
+    sea independiente del salt de recuperación.
     """
+    seed_bytes = phrase.strip().lower().encode("utf-8")
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=KEY_LEN,
         salt=salt,
         iterations=KDF_ITERS,
     )
-    key_bytes = kdf.derive(password.encode("utf-8"))
-    return bytearray(key_bytes)
+    return bytearray(kdf.derive(seed_bytes))
 
 
-# ──────────────────────────────────────────────────────────
-# Encrypt
-# ──────────────────────────────────────────────────────────
-def encrypt_content(plaintext: str, password: str) -> Tuple[bytes, bytes]:
+def hash_seed_phrase(phrase: str) -> str:
     """
-    Encrypt plaintext with AES-256-GCM.
+    Retorna SHA-256 hex del phrase normalizado.
+    Se guarda en SharedPreferences para verificar que la seed ingresada es correcta
+    sin exponer la seed en sí.
+    """
+    normalized = phrase.strip().lower()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+# ── Derivación de clave desde contraseña ─────────────────────────────────────
+def derive_key(password: str, salt: bytes) -> bytearray:
+    """Deriva AES-256 key desde contraseña usando PBKDF2-HMAC-SHA256."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=KEY_LEN,
+        salt=salt,
+        iterations=KDF_ITERS,
+    )
+    return bytearray(kdf.derive(password.encode("utf-8")))
+
+
+# ── Cifrado ───────────────────────────────────────────────────────────────────
+def encrypt_content(plaintext: str, password: str, seed_phrase: str) -> Tuple[bytes, bytes]:
+    """
+    Cifra plaintext con AES-256-GCM.
+
+    Args:
+        plaintext:    Texto a cifrar (se encode a UTF-8)
+        password:     Contraseña maestra del usuario
+        seed_phrase:  Semilla mnemónica (12 palabras) para recuperación
 
     Returns:
         (file_bytes, key_id)
-        file_bytes: complete .spd binary ready to write to disk
-        key_id:     16-byte identifier (for .key pairing)
+        file_bytes: binario completo .spd listo para escribir a disco
+        key_id:     identificador de 16 bytes del archivo
     """
-    salt    = secrets.token_bytes(SALT_LEN)
-    nonce   = secrets.token_bytes(IV_LEN)
-    key_id  = secrets.token_bytes(KEY_ID_LEN)
+    salt      = secrets.token_bytes(SALT_LEN)
+    nonce     = secrets.token_bytes(IV_LEN)
+    key_id    = secrets.token_bytes(KEY_ID_LEN)
+    rec_salt  = secrets.token_bytes(SALT_LEN)
+    rec_nonce = secrets.token_bytes(IV_LEN)
 
-    derived = derive_key(password, salt)
+    # 1. Derivar clave desde contraseña
+    master_key = derive_key(password, salt)
     try:
-        aesgcm = AESGCM(bytes(derived))
+        aesgcm = AESGCM(bytes(master_key))
         ct_with_tag = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
-        # cryptography lib appends 16-byte tag at end
-        ciphertext = ct_with_tag[:-TAG_LEN]
-        tag        = ct_with_tag[-TAG_LEN:]
+        ciphertext  = ct_with_tag[:-TAG_LEN]
+        tag         = ct_with_tag[-TAG_LEN:]
     finally:
-        secure_wipe(derived)
+        pass  # master_key se limpia al final
+
+    # 2. Cifrar master_key bajo la clave derivada de la seed (recovery blob)
+    rec_key = seed_phrase_to_key(seed_phrase, rec_salt)
+    try:
+        rec_aesgcm     = AESGCM(bytes(rec_key))
+        rec_ct_with_tag = rec_aesgcm.encrypt(rec_nonce, bytes(master_key), None)
+        rec_blob       = rec_ct_with_tag[:-TAG_LEN]
+        rec_tag        = rec_ct_with_tag[-TAG_LEN:]
+    finally:
+        secure_wipe(rec_key)
+        secure_wipe(master_key)
 
     ct_len = len(ciphertext)
 
     header = (
-        MAGIC_SPD
-        + struct.pack("<H", VERSION)     # 2 bytes version
-        + key_id                          # 16 bytes
-        + salt                            # 32 bytes
-        + nonce                           # 12 bytes
-        + tag                             # 16 bytes
-        + struct.pack("<Q", ct_len)       # 8 bytes
+        MAGIC_V2
+        + struct.pack("<H", VERSION)          # 2B
+        + key_id                               # 16B
+        + salt                                 # 32B
+        + nonce                                # 12B
+        + tag                                  # 16B
+        + rec_salt                             # 32B
+        + rec_nonce                            # 12B
+        + rec_tag                              # 16B
+        + struct.pack("<Q", ct_len)            # 8B
     )
 
-    return header + ciphertext, key_id
+    return header + ciphertext + rec_blob, key_id
 
 
-# ──────────────────────────────────────────────────────────
-# Decrypt
-# ──────────────────────────────────────────────────────────
+# ── Descifrado con contraseña ─────────────────────────────────────────────────
 def decrypt_content(file_bytes: bytes, password: str) -> str:
     """
-    Decrypt .spd file bytes.
+    Descifra un archivo .spd con la contraseña maestra.
 
     Raises:
-        ValueError  – bad magic / unsupported version / truncated file
-        SecurityError – authentication tag mismatch (wrong password or tampered file)
+        ValueError:     Magic/version inválido o archivo truncado.
+        SecurityError:  Tag GCM inválido (contraseña incorrecta o archivo manipulado).
     """
-    offset = 0
+    _check_magic(file_bytes)
+    salt, nonce, tag, ciphertext = _parse_content_fields(file_bytes)
 
-    # Magic
-    magic = file_bytes[offset:offset+8]; offset += 8
-    if magic != MAGIC_SPD:
-        raise ValueError("Archivo no reconocido: magic inválido.")
-
-    # Version
-    version = struct.unpack("<H", file_bytes[offset:offset+2])[0]; offset += 2
-    if version != VERSION:
-        raise ValueError(f"Versión de archivo no soportada: {version}")
-
-    # Key ID
-    key_id = file_bytes[offset:offset+KEY_ID_LEN]; offset += KEY_ID_LEN  # noqa: F841
-
-    # Salt
-    salt  = file_bytes[offset:offset+SALT_LEN];  offset += SALT_LEN
-
-    # Nonce
-    nonce = file_bytes[offset:offset+IV_LEN];    offset += IV_LEN
-
-    # Tag
-    tag   = file_bytes[offset:offset+TAG_LEN];   offset += TAG_LEN
-
-    # Ciphertext length
-    ct_len = struct.unpack("<Q", file_bytes[offset:offset+8])[0]; offset += 8
-
-    # Ciphertext
-    ciphertext = file_bytes[offset:offset+ct_len]
-    if len(ciphertext) != ct_len:
-        raise ValueError("Archivo truncado o corrupto.")
-
-    derived = derive_key(password, salt)
-    try:
-        aesgcm = AESGCM(bytes(derived))
-        ct_with_tag = ciphertext + tag
-        plaintext_bytes = aesgcm.decrypt(nonce, ct_with_tag, None)
-    except InvalidTag:
-        raise SecurityError(
-            "Firma de Seguridad Inválida: contraseña incorrecta o archivo manipulado."
-        )
-    finally:
-        secure_wipe(derived)
-
-    return plaintext_bytes.decode("utf-8")
-
-
-# ──────────────────────────────────────────────────────────
-# Recovery Key (.key file)
-# ──────────────────────────────────────────────────────────
-def export_recovery_key(
-    password: str,
-    salt: bytes,
-    key_id: bytes,
-    recovery_password: str,
-) -> bytes:
-    """
-    Build a .key file that stores the derived master key
-    encrypted under recovery_password.
-    """
     master_key = derive_key(password, salt)
-    rec_salt   = secrets.token_bytes(SALT_LEN)
-    rec_nonce  = secrets.token_bytes(IV_LEN)
-
-    rec_derived = derive_key(recovery_password, rec_salt)
-    try:
-        aesgcm  = AESGCM(bytes(rec_derived))
-        rec_ct_with_tag = aesgcm.encrypt(rec_nonce, bytes(master_key), None)
-        rec_ct  = rec_ct_with_tag[:-TAG_LEN]
-        rec_tag = rec_ct_with_tag[-TAG_LEN:]
-    finally:
-        secure_wipe(rec_derived)
-        secure_wipe(master_key)
-
-    return (
-        MAGIC_KEY
-        + key_id               # 16 bytes
-        + salt                 # 32 bytes — original file salt
-        + rec_salt             # 32 bytes
-        + rec_nonce            # 12 bytes
-        + rec_tag              # 16 bytes
-        + rec_ct               # 32 bytes (KEY_LEN)
-    )
-
-
-def decrypt_with_recovery_key(
-    file_bytes: bytes,
-    key_file_bytes: bytes,
-    recovery_password: str,
-) -> Tuple[str, str]:
-    """
-    Decrypt .spd using a .key file + recovery password.
-    Returns (plaintext, original_master_password_NOT_AVAILABLE).
-
-    Note: The original text password is NOT stored; only the derived key is.
-    Returns (plaintext, '<recuperado via .key>').
-    """
-    # Parse .key
-    offset = 0
-    magic = key_file_bytes[offset:offset+8]; offset += 8
-    if magic != MAGIC_KEY:
-        raise ValueError("Archivo .key inválido.")
-
-    key_id_key = key_file_bytes[offset:offset+KEY_ID_LEN]; offset += KEY_ID_LEN  # noqa
-    orig_salt  = key_file_bytes[offset:offset+SALT_LEN];   offset += SALT_LEN
-    rec_salt   = key_file_bytes[offset:offset+SALT_LEN];   offset += SALT_LEN
-    rec_nonce  = key_file_bytes[offset:offset+IV_LEN];     offset += IV_LEN
-    rec_tag    = key_file_bytes[offset:offset+TAG_LEN];    offset += TAG_LEN
-    rec_ct     = key_file_bytes[offset:offset+KEY_LEN];    offset += KEY_LEN
-
-    rec_derived = derive_key(recovery_password, rec_salt)
-    try:
-        aesgcm = AESGCM(bytes(rec_derived))
-        master_key_bytes = aesgcm.decrypt(rec_nonce, rec_ct + rec_tag, None)
-    except InvalidTag:
-        raise SecurityError(
-            "Firma de Seguridad Inválida: contraseña de recuperación incorrecta o .key manipulado."
-        )
-    finally:
-        secure_wipe(rec_derived)
-
-    master_key = bytearray(master_key_bytes)
-
-    # Parse .spd header
-    spd_offset = 8 + 2 + KEY_ID_LEN  # magic + version + key_id
-    salt  = file_bytes[spd_offset:spd_offset+SALT_LEN];  spd_offset += SALT_LEN
-    nonce = file_bytes[spd_offset:spd_offset+IV_LEN];    spd_offset += IV_LEN
-    tag   = file_bytes[spd_offset:spd_offset+TAG_LEN];   spd_offset += TAG_LEN
-    ct_len = struct.unpack("<Q", file_bytes[spd_offset:spd_offset+8])[0]; spd_offset += 8
-    ciphertext = file_bytes[spd_offset:spd_offset+ct_len]
-
     try:
         aesgcm = AESGCM(bytes(master_key))
         plaintext_bytes = aesgcm.decrypt(nonce, ciphertext + tag, None)
     except InvalidTag:
         raise SecurityError(
-            "Firma de Seguridad Inválida: .key no corresponde a este archivo."
+            "Firma de Seguridad Inválida: contraseña incorrecta o archivo manipulado."
         )
     finally:
         secure_wipe(master_key)
 
-    return plaintext_bytes.decode("utf-8"), "<recuperado vía .key>"
+    return plaintext_bytes.decode("utf-8")
+
+
+# ── Recuperación con semilla ──────────────────────────────────────────────────
+def decrypt_with_seed(file_bytes: bytes, seed_phrase: str) -> str:
+    """
+    Descifra un archivo .spd usando la semilla mnemónica de recuperación.
+
+    Raises:
+        ValueError:     Archivo inválido.
+        SecurityError:  Seed incorrecta o recovery blob manipulado.
+    """
+    if not validate_seed_phrase(seed_phrase):
+        raise ValueError("La semilla no es válida (verifica las 12 palabras).")
+
+    _check_magic(file_bytes)
+    _, _, _, ciphertext = _parse_content_fields(file_bytes)
+    salt, nonce, tag    = _parse_content_nonce_tag(file_bytes)
+    rec_salt, rec_nonce, rec_tag, rec_blob = _parse_recovery_fields(file_bytes)
+
+    # 1. Recuperar master_key desde seed
+    rec_key = seed_phrase_to_key(seed_phrase, rec_salt)
+    try:
+        rec_aesgcm = AESGCM(bytes(rec_key))
+        master_key_bytes = rec_aesgcm.decrypt(rec_nonce, rec_blob + rec_tag, None)
+    except InvalidTag:
+        raise SecurityError(
+            "Firma de Seguridad Inválida: semilla incorrecta o archivo manipulado."
+        )
+    finally:
+        secure_wipe(rec_key)
+
+    master_key = bytearray(master_key_bytes)
+
+    # 2. Descifrar contenido con master_key recuperada
+    try:
+        aesgcm = AESGCM(bytes(master_key))
+        plaintext_bytes = aesgcm.decrypt(nonce, ciphertext + tag, None)
+    except InvalidTag:
+        raise SecurityError(
+            "Firma de Seguridad Inválida: recovery blob no corresponde a este archivo."
+        )
+    finally:
+        secure_wipe(master_key)
+
+    return plaintext_bytes.decode("utf-8")
+
+
+# ── Re-cifrado (cambio de contraseña) ────────────────────────────────────────
+def reencrypt_content(file_bytes: bytes, old_password: str,
+                      new_password: str, seed_phrase: str) -> bytes:
+    """
+    Re-cifra el contenido con una nueva contraseña manteniendo la misma seed.
+    Útil para cambio de contraseña sin perder la recuperación.
+    """
+    plaintext = decrypt_content(file_bytes, old_password)
+    new_bytes, _ = encrypt_content(plaintext, new_password, seed_phrase)
+    secure_wipe_str(plaintext)
+    return new_bytes
+
+
+# ── Helpers de parseo ─────────────────────────────────────────────────────────
+def _check_magic(file_bytes: bytes):
+    if len(file_bytes) < HEADER_FIXED_SIZE:
+        raise ValueError("Archivo demasiado pequeño o corrupto.")
+    magic = file_bytes[OFF_MAGIC:OFF_MAGIC + 8]
+    if magic != MAGIC_V2:
+        raise ValueError(
+            "Formato de archivo no reconocido. "
+            "¿Fue creado con una versión anterior de SecurePad?"
+        )
+    version = struct.unpack("<H", file_bytes[OFF_VERSION:OFF_VERSION + 2])[0]
+    if version != VERSION:
+        raise ValueError(f"Versión de archivo no soportada: {version}")
+
+
+def _parse_content_fields(file_bytes: bytes):
+    salt       = file_bytes[OFF_SALT:OFF_SALT + SALT_LEN]
+    nonce      = file_bytes[OFF_NONCE:OFF_NONCE + IV_LEN]
+    tag        = file_bytes[OFF_TAG:OFF_TAG + TAG_LEN]
+    ct_len     = struct.unpack("<Q", file_bytes[OFF_CT_LEN:OFF_CT_LEN + 8])[0]
+    ciphertext = file_bytes[OFF_CT:OFF_CT + ct_len]
+    if len(ciphertext) != ct_len:
+        raise ValueError("Archivo truncado o corrupto.")
+    return salt, nonce, tag, ciphertext
+
+
+def _parse_content_nonce_tag(file_bytes: bytes):
+    salt  = file_bytes[OFF_SALT:OFF_SALT + SALT_LEN]
+    nonce = file_bytes[OFF_NONCE:OFF_NONCE + IV_LEN]
+    tag   = file_bytes[OFF_TAG:OFF_TAG + TAG_LEN]
+    return salt, nonce, tag
+
+
+def _parse_recovery_fields(file_bytes: bytes):
+    rec_salt  = file_bytes[OFF_REC_SALT:OFF_REC_SALT + SALT_LEN]
+    rec_nonce = file_bytes[OFF_REC_NONCE:OFF_REC_NONCE + IV_LEN]
+    rec_tag   = file_bytes[OFF_REC_TAG:OFF_REC_TAG + TAG_LEN]
+    ct_len    = struct.unpack("<Q", file_bytes[OFF_CT_LEN:OFF_CT_LEN + 8])[0]
+    rec_blob  = file_bytes[OFF_CT + ct_len: OFF_CT + ct_len + KEY_LEN]
+    if len(rec_blob) != KEY_LEN:
+        raise ValueError("Recovery blob ausente o truncado.")
+    return rec_salt, rec_nonce, rec_tag, rec_blob
 
 
 def get_key_id_from_file(file_bytes: bytes) -> bytes:
-    """Extract the KEY_ID from a .spd file (no decryption needed)."""
-    offset = 8 + 2  # magic + version
-    return file_bytes[offset:offset+KEY_ID_LEN]
+    return file_bytes[OFF_KEY_ID:OFF_KEY_ID + KEY_ID_LEN]
 
 
 def get_salt_from_file(file_bytes: bytes) -> bytes:
-    """Extract salt from a .spd file header."""
-    offset = 8 + 2 + KEY_ID_LEN  # magic + version + key_id
-    return file_bytes[offset:offset+SALT_LEN]
+    return file_bytes[OFF_SALT:OFF_SALT + SALT_LEN]
 
 
-# ──────────────────────────────────────────────────────────
-# Custom exception
-# ──────────────────────────────────────────────────────────
+# ── Excepción de seguridad ────────────────────────────────────────────────────
 class SecurityError(Exception):
-    """Raised when AES-GCM authentication fails."""
+    """Lanzada cuando falla la autenticación AES-GCM."""
     pass
