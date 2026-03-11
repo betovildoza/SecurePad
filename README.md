@@ -4,6 +4,12 @@
 
 # 🔐 SecurePad
 
+> [!WARNING]
+> **PROYECTO ARCHIVADO (RAMA FLET)**
+> Este branch contiene la implementación original en Python + Flet. 
+> Se archiva esta rama debido a las limitaciones del framework Flet para manipular y resaltar texto (RichText) durante las búsquedas y edición avanzada. 
+> El desarrollo activo de SecurePad continúa en la rama principal (`main`) usando **Tauri v2 + React**.
+
 **Editor de texto cifrado. Sin servidores. Sin compromisos.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
