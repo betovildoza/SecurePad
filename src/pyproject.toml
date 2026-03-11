@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "securepad"
+version = "1.0.0"
+description = "Encrypted notepad – AES-256-GCM + PBKDF2"
+requires-python = ">=3.10"
+dependencies = [
+    "flet>=0.21.0",
+    "cryptography>=42.0.0",
+]
+
+[project.scripts]
+securepad = "securepad.app:run"
+
+[tool.flet]
+# Used by `flet build`
+app_name        = "SecurePad"
+product_name    = "SecurePad"
+org             = "com.securepad"
+bundle_id       = "com.securepad.app"
+build_number    = 1
+version         = "1.0.0"
+description     = "Encrypted notepad"
