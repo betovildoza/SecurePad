@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Variables de entorno y secretos
+.env
+.env.local
+.env.*.local
+
+# Bóvedas encriptadas locales generadas por SecurePad
+*.spd
+
+# Crap / Basura temporal del antiguo empaquetador y logs
+build.log
+temp_tc.py
+temp_cr.py

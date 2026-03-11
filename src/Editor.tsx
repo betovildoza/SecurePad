@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Save, X, Lock, FilePlus, FolderOpen, Settings, Info } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
+
+// Import Componentes Extraídos
+import { Toolbar } from "./components/Toolbar";
+import { SettingsModal } from "./components/SettingsModal";
+import { SaveVaultModal } from "./components/SaveVaultModal";
+import { LockScreenOverlay } from "./components/LockScreenOverlay";
 
 interface EditorProps {
   initialContent: string;
@@ -243,42 +247,13 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", position: "relative" }}>
       
-      {/* TOOLBAR FLET-STYLE (MODIFICADO) */}
-      <div style={{ 
-        display: "flex", alignItems: "center", justifyContent: "space-between", 
-        padding: "0.5rem 1rem", background: "var(--panel)", borderBottom: "1px solid var(--border)",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.05)", zIndex: 10
-      }}>
-        {/* Lado Izquierdo (Vacío o Logo) */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--muted)", fontSize: "0.85rem", fontWeight: "bold" }}>
-          SecurePad Editor
-        </div>
-            
-        {/* Lado Derecho (Botones de Acción y Configuración) */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <button className="icon-btn" title="Nueva Bóveda" onClick={onNewVault}>
-                <FilePlus size={20} />
-            </button>
-            <button className="icon-btn" title="Abrir Bóveda" onClick={handleOpenLocal}>
-                <FolderOpen size={20} />
-            </button>
-            <button className="icon-btn" title="Guardar" onClick={handleSaveFlow}>
-                <Save size={20} />
-            </button>
-            
-            <div style={{ width: "1px", height: "24px", background: "var(--border)", margin: "0 4px" }} />
-
-            <button className="icon-btn" title="Ajustes (Alt+Z = Word Wrap)" onClick={() => setShowSettings(!showSettings)}>
-                <Settings size={20} />
-            </button>
-
-            <div style={{ width: "1px", height: "24px", background: "var(--border)", margin: "0 4px" }} />
-
-            <button className="icon-btn danger" title="Cerrar y Bloquear Bóveda" onClick={onClose} style={{ marginLeft: "0.25rem" }}>
-                <Lock size={20} color="var(--bg)" />
-            </button>
-        </div>
-      </div>
+      <Toolbar 
+        onNewVault={onNewVault}
+        onOpenLocal={handleOpenLocal}
+        onSaveFlow={handleSaveFlow}
+        onToggleSettings={() => setShowSettings(!showSettings)}
+        onClose={onClose}
+      />
 
       {/* EDITOR AREA (CodeMirror) */}
       <div style={{ flex: 1, display: "flex", position: "relative", overflow: "hidden", background: "var(--surface)", fontSize: `${fontSize}px`, fontFamily: fontFamily }}>
@@ -295,7 +270,7 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
                  lineNumbers: true,
                  foldGutter: false,
                  highlightActiveLine: false,
-                 searchKeymap: true // Habilita la búsqueda nativa de codemirror (ctrl+f)
+                 searchKeymap: true
               }}
               style={{
                  width: "100%", height: "100%", position: "absolute", top: 0, left: 0, bottom: 0, right: 0,
@@ -337,254 +312,39 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
           </div>
       </div>
 
-      {/* MODAL DE AJUSTES (DISEÑO BASE) */}
-      <AnimatePresence>
-      {showSettings && (
-          <div style={{
-              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "var(--overlay)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center"
-          }}>
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                style={{
-                    background: "var(--surface)", padding: "2rem", borderRadius: "12px",
-                    width: "100%", maxWidth: "400px", border: "1px solid var(--border)", position: "relative",
-                    display: "flex", flexDirection: "column", gap: "1.5rem"
-                }}
-              >
-                  <button className="icon-btn" onClick={() => setShowSettings(false)} style={{ position: "absolute", top: "16px", right: "16px" }}>
-                      <X size={20} />
-                  </button>
+      <SettingsModal 
+          isOpen={showSettings}
+          theme={theme} setTheme={setTheme}
+          fontFamily={fontFamily} setFontFamily={setFontFamily}
+          fontSize={fontSize} setFontSize={setFontSize}
+          wordWrap={wordWrap} setWordWrap={setWordWrap}
+          fontOptions={fontOptions}
+          onClose={() => setShowSettings(false)}
+      />
 
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Settings size={22} /> Ajustes del Documento</h3>
-                  
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold" }}>Tema Visual</label>
-                      <div style={{ display: "flex", gap: "0.5rem", background: "var(--panel)", padding: "4px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                          <button 
-                             style={{ flex: 1, padding: "6px", background: theme === "dark" ? "var(--surface)" : "transparent", color: theme === "dark" ? "var(--text)" : "var(--muted)", border: theme === "dark" ? "1px solid var(--border)" : "none", borderRadius: "6px", boxShadow: theme === "dark" ? "0 2px 5px rgba(0,0,0,0.2)" : "none" }}
-                             onClick={() => { setTheme("dark"); document.documentElement.setAttribute("data-theme", "dark"); }}
-                          >
-                              Noche
-                          </button>
-                          <button 
-                             style={{ flex: 1, padding: "6px", background: theme === "light" ? "var(--surface)" : "transparent", color: theme === "light" ? "var(--text)" : "var(--muted)", border: theme === "light" ? "1px solid var(--border)" : "none", borderRadius: "6px", boxShadow: theme === "light" ? "0 2px 5px rgba(0,0,0,0.1)" : "none" }}
-                             onClick={() => { setTheme("light"); document.documentElement.setAttribute("data-theme", "light"); }}
-                          >
-                              Día
-                          </button>
-                      </div>
-                  </div>
+      <SaveVaultModal 
+          isOpen={showSaveModal}
+          currentFilePath={currentFilePath}
+          password={password as any} setPassword={setPassword}
+          confirmPassword={confirmPassword as any} setConfirmPassword={setConfirmPassword}
+          error={error} isSaving={isSaving} onSubmit={executeSave}
+          onClose={() => setShowSaveModal(false)}
+      />
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold" }}>Tipografía</label>
-                      <select 
-                         style={{ padding: "8px", background: "var(--panel)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "4px", outline: "none" }}
-                         value={fontFamily}
-                         onChange={(e) => setFontFamily(e.target.value)}
-                      >
-                          {fontOptions.map(font => (
-                              <option key={font.value} value={font.value}>{font.label}</option>
-                          ))}
-                      </select>
-                  </div>
+      <LockScreenOverlay 
+          isLocked={isLocked}
+          currentFilePath={currentFilePath}
+          unlockMode={unlockMode} setUnlockMode={setUnlockMode}
+          unlockError={unlockError} setUnlockError={setUnlockError}
+          unlockPassword={unlockPassword as any} setUnlockPassword={setUnlockPassword}
+          unlockSeed={unlockSeed} setUnlockSeed={setUnlockSeed}
+          newGeneratedSeed={newGeneratedSeed} setNewGeneratedSeed={setNewGeneratedSeed}
+          onUnlockSubmit={handleUnlock}
+          onClosePhysical={onClose}
+          onSaveFlow={handleSaveFlow}
+          onReturnEditor={() => setIsLocked(false)}
+      />
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold" }}>Tamaño de fuente: {fontSize}px</label>
-                      <input 
-                         type="range" min="10" max="32" value={fontSize} 
-                         onChange={(e) => setFontSize(Number(e.target.value))}
-                         style={{ width: "100%" }}
-                      />
-                  </div>
-
-                  <div 
-                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
-                     onClick={() => setWordWrap(!wordWrap)}
-                     title="Atajo de teclado: Alt+Z"
-                  >
-                      <label style={{ fontSize: "0.85rem", color: "var(--muted)", fontWeight: "bold", cursor: "pointer" }}>Word Wrap (Alt+Z)</label>
-                      <div style={{ 
-                          width: "44px", height: "24px", background: wordWrap ? "var(--accent)" : "var(--panel)", 
-                          borderRadius: "12px", padding: "2px", display: "flex", alignItems: "center", 
-                          justifyContent: wordWrap ? "flex-end" : "flex-start", border: "1px solid var(--border)", transition: "all 0.3s" 
-                      }}>
-                          <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: wordWrap ? "#fff" : "var(--muted)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "all 0.3s" }} />
-                      </div>
-                  </div>
-              </motion.div>
-          </div>
-      )}
-      </AnimatePresence>
-
-      {/* MODAL GUARDAR */}
-      <AnimatePresence>
-      {showSaveModal && (
-        <div style={{
-            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-            background: "var(--overlay)", zIndex: 100,
-            display: "flex", alignItems: "center", justifyContent: "center"
-        }}>
-            <motion.div 
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                style={{
-                    background: "var(--surface)", padding: "2rem", borderRadius: "12px",
-                    width: "100%", maxWidth: "450px", border: "1px solid var(--border)"
-                }}
-            >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem" }}>
-                    <Lock size={24} color="var(--accent)" />
-                    <h2 style={{ margin: 0, fontSize: "1.25rem" }}>{currentFilePath ? "Actualizar Bóveda" : "Proteger Nueva Bóveda"}</h2>
-                </div>
-
-                <form onSubmit={executeSave} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                    <div>
-                        <label style={{ display: "block", fontSize: "0.85rem", color: "var(--muted)", marginBottom: "4px", fontWeight: "600" }}>Contraseña Maestra</label>
-                        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%", padding: "10px" }} autoFocus />
-                    </div>
-
-                    {!currentFilePath && (
-                         <div>
-                         <label style={{ display: "block", fontSize: "0.85rem", color: "var(--muted)", marginBottom: "4px", fontWeight: "600" }}>Confirmar Contraseña</label>
-                         <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%", padding: "10px" }} />
-                     </div>
-                    )}
-
-                    {error && <p style={{ color: "var(--danger)", margin: 0, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}><Info size={14} /> {error}</p>}
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-                        <button type="button" onClick={() => setShowSaveModal(false)} disabled={isSaving} style={{ padding: "10px 16px", background: "transparent", color: "var(--text)" }}>Cancelar</button>
-                        <button type="submit" className="primary" disabled={isSaving || !password} style={{ padding: "10px 16px" }}>
-                            {isSaving ? "Cifrando..." : "Cifrar y Guardar"}
-                        </button>
-                    </div>
-                </form>
-            </motion.div>
-        </div>
-      )}
-      </AnimatePresence>
-
-      {/* MODAL AUTO-LOCK / MANUAL LOCK */}
-      <AnimatePresence>
-      {isLocked && (
-          <div style={{
-              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(0,0,0,0.85)", zIndex: 1000, 
-              display: "flex", alignItems: "center", justifyContent: "center",
-              backdropFilter: "blur(4px)"
-          }}>
-              {!currentFilePath ? (
-                  <motion.div 
-                     initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-                     style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}
-                  >
-                      <div style={{ 
-                          width: "35vh", height: "35vh", borderRadius: "50%", 
-                          background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "center",
-                          border: "1px solid var(--border)", boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
-                      }}>
-                          <Lock size={"15vh"} color="var(--accent)" />
-                      </div>
-                      <h2 style={{ color: "white", margin: "1rem 0 0 0", fontSize: "1.5rem" }}>Documento Oculto</h2>
-                      <p style={{ color: "var(--muted)", margin: "0", maxWidth: "300px" }}>Este documento aún no ha sido guardado ni cifrado.</p>
-                      <button onClick={() => setIsLocked(false)} className="primary" style={{ padding: "12px 24px", marginTop: "1rem", fontSize: "1rem" }}>
-                          Regresar al Editor
-                      </button>
-                  </motion.div>
-              ) : (
-                  <motion.div 
-                      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      style={{ textAlign: "center", width: "100%", maxWidth: "340px", padding: "2rem", background: "var(--surface)", borderRadius: "12px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}
-                  >
-                      <div style={{ 
-                          width: "64px", height: "64px", borderRadius: "50%", 
-                          background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "center",
-                          margin: "0 auto 1.5rem auto", border: "1px solid var(--border)"
-                      }}>
-                          <Lock size={32} color="var(--accent)" />
-                      </div>
-                      <h2 style={{ margin: "0 0 0.5rem 0" }}>Bóveda Bloqueada</h2>
-                      <p style={{ margin: "0 0 2rem 0", color: "var(--muted)", fontSize: "0.9rem" }}>La bóveda ha sido bloqueada por seguridad. Introduce tus credenciales para continuar.</p>
-                  
-                  <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", background: "var(--surface)", padding: "4px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                      <button 
-                         style={{ flex: 1, padding: "6px", background: unlockMode === "PASSWORD" ? "var(--panel)" : "transparent", color: unlockMode === "PASSWORD" ? "var(--text)" : "var(--muted)", border: unlockMode === "PASSWORD" ? "1px solid var(--border)" : "none", borderRadius: "6px" }}
-                         onClick={() => { setUnlockMode("PASSWORD"); setUnlockError(""); setNewGeneratedSeed(null); }}
-                      >
-                          Contraseña
-                      </button>
-                      <button 
-                         style={{ flex: 1, padding: "6px", background: unlockMode === "SEED" ? "var(--panel)" : "transparent", color: unlockMode === "SEED" ? "var(--text)" : "var(--muted)", border: unlockMode === "SEED" ? "1px solid var(--border)" : "none", borderRadius: "6px" }}
-                         onClick={() => { setUnlockMode("SEED"); setUnlockError(""); setNewGeneratedSeed(null); }}
-                      >
-                          BiP39
-                      </button>
-                      <button 
-                         style={{ flex: 1, padding: "6px", background: unlockMode === "RESET_SEED" ? "var(--panel)" : "transparent", color: unlockMode === "RESET_SEED" ? "var(--text)" : "var(--muted)", border: unlockMode === "RESET_SEED" ? "1px solid var(--border)" : "none", borderRadius: "6px" }}
-                         onClick={() => { setUnlockMode("RESET_SEED"); setUnlockError(""); setNewGeneratedSeed(null); }}
-                         title="Generar nueva semilla de recuperación"
-                      >
-                          Reset
-                      </button>
-                  </div>
-
-                  {newGeneratedSeed && unlockMode === "RESET_SEED" && (
-                    <div style={{ background: "rgba(46, 125, 50, 0.1)", border: "1px solid var(--success)", padding: "1rem", borderRadius: "8px", marginBottom: "1.5rem" }}>
-                        <p style={{ margin: "0 0 0.5rem 0", color: "var(--success)", fontWeight: "bold", fontSize: "0.85rem" }}>✅ Semilla Regenerada</p>
-                        <div style={{ background: "var(--bg)", padding: "0.5rem", borderRadius: "4px", fontFamily: "var(--font-mono)", fontSize: "0.9rem", userSelect: "all" }}>
-                            {newGeneratedSeed}
-                        </div>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleUnlock} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                      {unlockMode === "PASSWORD" || unlockMode === "RESET_SEED" ? (
-                          <input 
-                              type="password" placeholder="Contraseña Maestra..." value={unlockPassword}
-                              onChange={(e) => setUnlockPassword(e.target.value)}
-                              style={{ width: "100%", padding: "12px", textAlign: "center" }} autoFocus
-                          />
-                      ) : (
-                          <textarea 
-                              placeholder="12 Palabras de seguridad separadas por espacio..." value={unlockSeed}
-                              onChange={(e) => setUnlockSeed(e.target.value)}
-                              style={{ width: "100%", padding: "12px", height: "100px", resize: "none", fontFamily: "var(--font-mono)" }} autoFocus
-                          />
-                      )}
-                      
-                      {unlockError && <p style={{ color: unlockMode === "RESET_SEED" && newGeneratedSeed ? "var(--success)" : "var(--danger)", margin: 0, fontSize: "0.85rem" }}>{unlockError}</p>}
-                      
-                      {(!newGeneratedSeed || unlockMode !== "RESET_SEED") && (
-                          <button type="submit" className={unlockMode === "RESET_SEED" ? "danger" : "primary"} style={{ padding: "12px", width: "100%" }} disabled={unlockMode === "SEED" ? !unlockSeed : !unlockPassword}>
-                              {unlockMode === "RESET_SEED" ? "Regenerar Semilla y Re-cifrar" : "Desbloquear"}
-                          </button>
-                      )}
-
-                      {newGeneratedSeed && unlockMode === "RESET_SEED" && (
-                          <button type="button" className="primary" onClick={() => { setIsLocked(false); setNewGeneratedSeed(null); setUnlockPassword(""); }} style={{ padding: "12px", width: "100%" }}>
-                              He guardado la semilla. Continuar a la Bóveda.
-                          </button>
-                      )}
-                      
-                      {currentFilePath && (
-                          <button type="button" onClick={() => { setIsLocked(false); handleSaveFlow(); }} style={{ padding: "12px", width: "100%", background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", marginBottom: "0.5rem" }}>
-                              Guardar Cambios
-                          </button>
-                      )}
-                      
-                      <button type="button" onClick={onClose} style={{ padding: "12px", width: "100%", background: "transparent", color: "var(--danger)", border: "none" }}>
-                          Cerrar Archivo Físicamente
-                      </button>
-                  </form>
-                  </motion.div>
-              )}
-          </div>
-      )}
-      </AnimatePresence>
     </div>
   );
 }
