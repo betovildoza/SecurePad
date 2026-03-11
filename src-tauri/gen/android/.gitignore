@@ -17,3 +17,8 @@ key.properties
 
 /.tauri
 /tauri.settings.gradle
+
+# Compilación y caché de Kotlin nativo
+.kotlin/
+.kotlin_workspace
+.kotlin_module
