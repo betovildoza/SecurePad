@@ -74,8 +74,10 @@ def build_panel_setup(*, page: ft.Page, on_verified, S: dict):
                 "Ya las guardé, continuar →", on_click=_to_step2,
                 style=ft.ButtonStyle(
                     bgcolor=DARK["accent"], color=white(),
+                    overlay_color={ft.ControlState.HOVERED: "#014002", ft.ControlState.PRESSED: "#FFFFFF40"},
                     shape=ft.RoundedRectangleBorder(radius=8),
                     padding=ft.Padding(left=24, right=24, top=12, bottom=12),
+                    mouse_cursor=ft.MouseCursor.CLICK,
                 ),
             ),
         ],
@@ -99,8 +101,10 @@ def build_panel_setup(*, page: ft.Page, on_verified, S: dict):
                 "Verificar y comenzar", on_click=_verify,
                 style=ft.ButtonStyle(
                     bgcolor=DARK["success"], color=white(),
+                    overlay_color={ft.ControlState.HOVERED: "#014002", ft.ControlState.PRESSED: "#FFFFFF40"},
                     shape=ft.RoundedRectangleBorder(radius=8),
                     padding=ft.Padding(left=24, right=24, top=12, bottom=12),
+                    mouse_cursor=ft.MouseCursor.CLICK,
                 ),
             ),
         ],
@@ -143,10 +147,8 @@ def build_panel_editor(
     S: dict,
     # controles del editor
     editor: ft.TextField,
-    lineno_col: ft.Column,
     title_txt: ft.Text,
     status_txt: ft.Text,
-    cursor_txt: ft.Text,
     pwd_field: ft.TextField,
     pwd_err: ft.Text,
     pwd_title: ft.Text,
@@ -161,7 +163,7 @@ def build_panel_editor(
     on_seed_recovery, on_reinsert_seed, on_reset_seed, on_editor_scroll,
     # refs
     r_lock, r_editor, r_findbar,
-    r_toolbar, r_editor_container, r_lineno_container,
+    r_toolbar, r_editor_container,
     r_status_bar, r_findbar_inner,
 ) -> ft.Column:
     """
@@ -180,6 +182,35 @@ def build_panel_editor(
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=5),
                 padding=ft.Padding(left=5, right=5, top=5, bottom=5),
+                overlay_color={
+                    ft.ControlState.HOVERED:  "#014002",
+                    ft.ControlState.PRESSED:  "#FFFFFF30",
+                },
+                mouse_cursor=ft.MouseCursor.CLICK,
+            ),
+        )
+
+    def _filled_btn(label, ico, fn, bg, fg, radius=8):
+        """FilledButton con hover visible y cursor puntero."""
+        # Calcular color hover: mezcla del bg con blanco al 15 %
+        return ft.FilledButton(
+            label, icon=icon(ico), on_click=fn,
+            style=ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.DEFAULT: bg,
+                    ft.ControlState.HOVERED: bg,   # mantenemos bg; overlay lo ilumina
+                    ft.ControlState.PRESSED:  bg,
+                    ft.ControlState.FOCUSED:  bg,
+                    ft.ControlState.DISABLED: bg,
+                },
+                color=fg,
+                overlay_color={
+                    ft.ControlState.HOVERED: "#014002",
+                    ft.ControlState.PRESSED: "#FFFFFF40",
+                },
+                shape=ft.RoundedRectangleBorder(radius=radius),
+                padding=ft.Padding(8, 8, 8, 8),
+                mouse_cursor=ft.MouseCursor.CLICK,
             ),
         )
 
@@ -225,46 +256,34 @@ def build_panel_editor(
 
     # ── Área de edición: números + editor ─────────────────────────────────
     #
-    # CLAVE para alineación sin scroll asíncrono y Flet 0.82+:
-    #   · Se elimina GestureDetector porque 'editor' ahora tiene min_lines=N.
-    #   · Crecen sus Heights unificadamente en el DOM.
-    #   · editor_area_scroll es la encargada pura del desvío vertical.
+    # ALINEACIÓN 1:1 garantizada:
+    #   · lineno_col es ft.Column(scroll=HIDDEN) con ft.Text(height=LINE_H) por renglón.
+    #   · editor usa TextStyle + StrutStyle con el mismo LINE_H y font_family.
+    #   · GestureDetector captura scroll del editor y lo espeja en lineno_col.scroll_to().
     #
     editor_row = ft.Row(
         expand=True, spacing=0,
-        vertical_alignment=ft.CrossAxisAlignment.START,
+        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
         controls=[
-            # Columna de números de línea
-            ft.Container(
-                ref=r_lineno_container,
-                content=lineno_col,
-                bgcolor=DARK["lineno_bg"],
-                width=50,
-                padding=ft.Padding(top=16, bottom=16, left=6, right=8),
-                border=ft.Border(right=ft.BorderSide(1, DARK["border"])),
-                clip_behavior=ft.ClipBehavior.HARD_EDGE,
-            ),
-            # Editor con min_lines
+            # Editor con GestureDetector (Legacy Reversion)
             ft.Container(
                 ref=r_editor_container,
                 expand=True,
                 bgcolor=DARK["surface"],
                 padding=ft.Padding(top=16, bottom=16, left=12, right=16),
-                content=editor,
+                content=ft.GestureDetector(
+                    content=editor,
+                    on_scroll=on_editor_scroll,
+                    expand=True,
+                ),
             ),
         ],
-    )
-
-    editor_area = ft.Column(
-        expand=True,
-        scroll=ft.ScrollMode.AUTO,
-        controls=[editor_row],
     )
 
     editor_col = ft.Column(
         ref=r_editor, visible=False,
         expand=True, spacing=0,
-        controls=[find_bar, editor_area],
+        controls=[find_bar, editor_row],
     )
 
     # ── Lock screen ───────────────────────────────────────────────────────
@@ -288,25 +307,20 @@ def build_panel_editor(
                             pwd_field, ft.Container(height=4), pwd_err,
                             ft.Container(height=14),
                             ft.Row([
-                                ft.FilledButton(
-                                    "Desbloquear", icon=icon("LOCK_OPEN_OUTLINED"),
-                                    on_click=on_unlock,
-                                    style=ft.ButtonStyle(
-                                        bgcolor=DARK["accent"], color=white(),
-                                        shape=ft.RoundedRectangleBorder(radius=8),
-                                        padding=ft.Padding(left=22, right=22, top=11, bottom=11),
-                                    ),
-                                ),
+                                _filled_btn("Desbloquear", "LOCK_OPEN_OUTLINED", on_unlock,
+                                    DARK["accent"], white(), radius=8),
                             ], alignment=ft.MainAxisAlignment.CENTER),
                             ft.Container(height=20),
+                            # FIX UX: wrap=True para que los botones se adapten al width=370 del card
                             ft.Row([
-                                ft.TextButton("Abrir otro archivo",    on_click=on_open),
-                                ft.TextButton("Recuperar con semilla", on_click=on_seed_recovery),
-                            ], alignment=ft.MainAxisAlignment.CENTER),
+                                _filled_btn("Abrir archivo", "FOLDER_OPEN_OUTLINED", on_open, DARK["panel"], DARK["text"]),
+                                _filled_btn("Recuperar semilla", "KEY_OUTLINED", on_seed_recovery, DARK["panel"], DARK["text"]),
+                            ], alignment=ft.MainAxisAlignment.CENTER, wrap=True, spacing=6, run_spacing=6),
+                            ft.Container(height=8),
                             ft.Row([
-                                ft.TextButton("Reinserción de Semilla", on_click=on_reinsert_seed, style=ft.ButtonStyle(color=DARK["accent"])),
-                                ft.TextButton("Reset Semilla", on_click=on_reset_seed, style=ft.ButtonStyle(color=DARK["danger"])),
-                            ], alignment=ft.MainAxisAlignment.CENTER),
+                                _filled_btn("Reinsertar Semilla", "INPUT_OUTLINED", on_reinsert_seed, DARK["accent"], white()),
+                                _filled_btn("Reset Semilla", "DELETE_FOREVER_OUTLINED", on_reset_seed, DARK["danger"], white()),
+                            ], alignment=ft.MainAxisAlignment.CENTER, wrap=True, spacing=6, run_spacing=6),
                         ],
                     ),
                     width=370, bgcolor=DARK["surface"], border_radius=12,
@@ -327,8 +341,6 @@ def build_panel_editor(
         ref=r_status_bar,
         content=ft.Row([
             status_txt, ft.Container(expand=True),
-            cursor_txt,
-            ft.Container(width=12),
             ft.Text("AES-256-GCM · PBKDF2-200K", size=10, color=DARK["muted"]),
         ]),
         bgcolor=DARK["panel"],

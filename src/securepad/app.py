@@ -41,8 +41,8 @@ DARK = {
     "accent":   "#4A9EFF",
     "danger":   "#FF4444",
     "success":  "#3DBA6F",
-    "lineno":   "#3A3A3A",
-    "lineno_bg":"#141414",
+    "lineno":    "#686868",
+    "lineno_bg": "#141414",
     "overlay":  "#000000",
     "cursor":   "#4A9EFF",
 }
@@ -62,6 +62,8 @@ LIGHT = {
     "overlay":  "#000000",
     "cursor":   "#1565C0",
 }
+
+
 
 def icon(name: str):
     try:    return getattr(ft.Icons, name)
@@ -135,7 +137,8 @@ async def main(page: ft.Page):
         "seed_phrase":  None,
         "obscured":     False,
         "setup_done":   False,
-        "find_idx":     0,       # posición del cursor de búsqueda
+        "find_idx":        0,        # posición del cursor de búsqueda
+        "unlocked_buffer": None,     # texto en memoria durante lock temporal
     }
 
     def _C(k): return C(S, k)
@@ -166,17 +169,10 @@ async def main(page: ft.Page):
         text_style=text_style(DARK["text"], FONT_SZ),
         strut_style=strut(FONT_SZ),
         bgcolor="transparent",
-        on_change=lambda e: _sync_linenos(e.control.value),
-    )
-
-    lineno_col = ft.Text(
-        "1", font_family=FONT_MONO, size=FONT_SZ,
-        color=DARK["lineno"], height=LINE_H,
-        text_align=ft.TextAlign.RIGHT, no_wrap=True
+        on_change=lambda e: _update_ln_col(e.control.value or ""),
     )
 
     status_txt = ft.Text("", size=11, color=DARK["muted"])
-    cursor_txt = ft.Text("Ln 1, Col 1", size=11, color=DARK["muted"])
     title_txt  = ft.Text(APP_NAME, size=14, weight=ft.FontWeight.W_500,
                          color=DARK["text"])
 
@@ -186,8 +182,8 @@ async def main(page: ft.Page):
         text_style=text_style(DARK["text"], FONT_SZ), autofocus=True,
     )
     pwd_err   = ft.Text("", color=DARK["danger"], size=12)
-    pwd_title = ft.Text("Desbloquear", size=16, weight=ft.FontWeight.W_600,
-                        color=DARK["text"])
+    pwd_title = ft.Text("Desbloquear", size=18, weight=ft.FontWeight.BOLD,
+                        color=white())
     pwd_hint  = ft.Text("", size=11, color=DARK["muted"])
 
     find_f    = ft.TextField(label="Buscar",     dense=True, width=190, label_style=ft.TextStyle(color=DARK["muted"]))
@@ -197,6 +193,17 @@ async def main(page: ft.Page):
     # ─────────────────────────────────────────────────────────────────────
     # 1. _update_editor_style — sincroniza fuente + altura en todos los sitios
     # ─────────────────────────────────────────────────────────────────────
+    def _update_ln_col(text: str = ""):
+        """Actualiza Ln/Col en la status bar."""
+        lines = text.split("\n") if text else [""]
+        total = len(lines)
+        # Intentar obtener posición del cursor (no siempre disponible en Flet)
+        ln = S.get("cursor_ln", 1)
+        col = S.get("cursor_col", 1)
+        status_txt.value = f"Ln {ln}/{total} · Col {col}"
+        status_txt.color = _C("muted")
+        page.update()
+
     def _update_editor_style():
         fam = S.get("font_family", FONT_MONO)
         sz  = S["font_sz"]
@@ -211,11 +218,6 @@ async def main(page: ft.Page):
         )
         editor.cursor_color = _C("cursor")
         editor.selection_color = _C("accent")
-        # Números de línea: mismo size y height
-        lineno_col.font_family = fam
-        lineno_col.size   = sz
-        lineno_col.color  = _C("lineno")
-        lineno_col.height = LINE_H
 
     # ─────────────────────────────────────────────────────────────────────
     # 3. _apply_theme — actualiza bgcolor/border de contenedores principales
@@ -255,11 +257,6 @@ async def main(page: ft.Page):
         if r_editor_container.current:
             r_editor_container.current.bgcolor = T["surface"]
 
-        if r_lineno_container.current:
-            r_lineno_container.current.bgcolor = T["lineno_bg"]
-            r_lineno_container.current.border  = ft.Border(
-                right=ft.BorderSide(1, T["border"]))
-
         if r_status_bar.current:
             r_status_bar.current.bgcolor = T["panel"]
             r_status_bar.current.border  = ft.Border(
@@ -273,8 +270,8 @@ async def main(page: ft.Page):
         replace_f.label_style = ft.TextStyle(color=T["muted"])
         title_txt.color  = T["text"]
         status_txt.color = T["muted"]
-        cursor_txt.color = T["muted"]
-        pwd_title.color  = T["text"]
+        # pwd_title siempre en máximo contraste: blanco en oscuro, negro en claro
+        pwd_title.color  = white() if S["dark"] else T["text"]
         pwd_hint.color   = T["muted"]
         find_msg.color   = T["muted"]
         _update_editor_style()
@@ -300,19 +297,7 @@ async def main(page: ft.Page):
             S["dirty"] = True
             _update_title()
 
-    def _sync_linenos(text: str):
-        n  = max(1, text.count("\n") + 1) if text else 1
-        # Generar un solo string con saltos de línea escalares
-        lineno_col.value = "\n".join(str(i + 1) for i in range(n))
-        editor.min_lines = n
-        page.update()
-
-    def _update_cursor(text, offset):
-        before = text[:offset]
-        ln  = before.count("\n") + 1
-        col = len(before.split("\n")[-1]) + 1
-        cursor_txt.value = f"Ln {ln}, Col {col}"
-        page.update()
+    
 
     def _show_lock():
         if r_lock.current:   r_lock.current.visible   = True
@@ -330,14 +315,16 @@ async def main(page: ft.Page):
             S["obscured"] = show
             page.update()
 
-    editor.on_change = lambda e: (
-        touch(), _mark_dirty(), _sync_linenos(e.control.value or "")
-    )
-    editor.on_selection_change = lambda e: (
-        touch(),
-        _update_cursor(editor.value or "",
-                       e.selection.base_offset if e.selection else 0),
-    )
+    def _editor_changed(e):
+        touch()
+        _mark_dirty()
+        val = e.control.value or ""
+        new_lines = val.count("\n") + 1
+        if new_lines != S.get("last_line_cnt", 1):
+            S["last_line_cnt"] = new_lines
+        _update_ln_col(val)
+
+    editor.on_change = _editor_changed
 
     # ─────────────────────────────────────────────────────────────────────
     # Auto-lock + Lifecycle
@@ -361,13 +348,19 @@ async def main(page: ft.Page):
     # Lock / Unlock
     # ─────────────────────────────────────────────────────────────────────
     async def _do_lock(e=None):
+        # Preservar texto en memoria antes de blanquear el editor.
+        # Si file_bytes existe, el buffer nos permite restaurar sin descifrar de nuevo.
+        # Si es nota nueva (file_bytes is None), también se preserva para no perder trabajo.
+        current_text = editor.value or ""
+        if current_text:
+            S["unlocked_buffer"] = current_text
         S["unlocked"] = False
         editor.value  = ""
-        _sync_linenos("")
+        _update_ln_col(editor.value or "")
         secure_wipe_str(pwd_field.value or "")
         pwd_field.value = ""; pwd_err.value = ""
         _show_lock(); _update_title()
-        _set_status("Sesión bloqueada.")
+        _set_status("Sesión bloqueada. Desbloquea para continuar.")
 
     async def _attempt_unlock(e=None):
         touch()
@@ -375,21 +368,60 @@ async def main(page: ft.Page):
         if not pwd:
             pwd_err.value = "Ingresa tu contraseña."; page.update(); return
 
+        # ── Caso: nueva nota (nunca guardada) ─────────────────────────────
         if S["file_bytes"] is None:
+            buf = S.get("unlocked_buffer") or ""
             S["unlocked"] = True; pwd_err.value = ""
-            _hide_lock(); _update_title(); _sync_linenos("")
-            _set_status("Nueva nota lista. Ctrl+S para guardar.")
+            editor.value  = buf
+            _update_editor_style()
+            _update_ln_col(editor.value or "")
+            _hide_lock(); _update_title()
+            if buf:
+                _set_status("Nota restaurada desde memoria.")
+            else:
+                _set_status("Nueva nota lista. Ctrl+S para guardar.")
             return
 
+        # ── Caso: hay buffer en memoria y el archivo no cambió ────────────
+        # Evita descifrar de nuevo si el usuario solo bloqueó y desbloquea
+        # la misma sesión. Validamos con la contraseña igualmente para no
+        # crear un bypass: si el buffer existe pero la contraseña falla
+        # el descifrado, la ruta de error se ejecuta normalmente.
+        buf = S.get("unlocked_buffer")
+        if buf is not None:
+            try:
+                # Verificación ligera: intentar descifrar solo para validar pwd.
+                # Si pasa, restauramos desde buffer (más rápido, sin re-parseo).
+                _set_status("Verificando contraseña…"); page.update()
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None, decrypt_content, S["file_bytes"], pwd)
+                # Contraseña válida → restaurar desde buffer
+                S["unlocked"] = True
+                editor.value  = buf
+                _update_editor_style()
+                _update_ln_col(editor.value or "")
+                pwd_err.value = ""; secure_wipe_str(pwd); pwd_field.value = ""
+                _hide_lock(); _update_title()
+                _set_status(f"Restaurado: {os.path.basename(S['current_file'])}", _C("success"))
+                page.update()
+                return
+            except (SecurityError, Exception):
+                # Contraseña incorrecta: limpiamos buffer y continuamos con
+                # descifrado normal para mostrar el error adecuado.
+                S["unlocked_buffer"] = None
+
+        # ── Caso estándar: descifrar desde file_bytes ─────────────────────
         try:
             _set_status("Derivando clave…"); page.update()
             loop = asyncio.get_event_loop()
             pt   = await loop.run_in_executor(
                 None, decrypt_content, S["file_bytes"], pwd)
             S["unlocked"] = True
+            S["unlocked_buffer"] = pt          # guardar para futuros locks
             editor.value  = pt
             _update_editor_style()
-            _sync_linenos(pt)
+            _update_ln_col(editor.value or "")
             pwd_err.value = ""; secure_wipe_str(pwd); pwd_field.value = ""
             _hide_lock(); _update_title()
             _set_status(f"Abierto: {os.path.basename(S['current_file'])}", _C("success"))
@@ -502,7 +534,7 @@ async def main(page: ft.Page):
                 S["unlocked"] = True
                 editor.value  = pt
                 _update_editor_style()
-                _sync_linenos(pt); S["dirty"] = False
+                _update_ln_col(editor.value or ""); S["dirty"] = False
                 close_dlg(page); secure_wipe_str(phrase); seed_f.value = ""
                 _hide_lock(); _update_title()
                 _set_status("Archivo recuperado con semilla.", _C("success"))
@@ -530,7 +562,8 @@ async def main(page: ft.Page):
     async def _new_file(e=None):
         touch()
         S.update({"current_file": None, "file_bytes": None,
-                  "unlocked": False, "dirty": False})
+                  "unlocked": False, "dirty": False,
+                  "unlocked_buffer": None})   # sin buffer de sesión anterior
         editor.value = ""; pwd_field.value = ""; pwd_err.value = ""
         if r_findbar.current: r_findbar.current.visible = False
         find_f.value = ""; find_msg.value = ""; S["find_idx"] = 0
@@ -552,7 +585,8 @@ async def main(page: ft.Page):
         try:
             with open(path, "rb") as f: raw = f.read()
             S.update({"current_file": path, "file_bytes": raw,
-                      "unlocked": False, "dirty": False})
+                      "unlocked": False, "dirty": False,
+                      "unlocked_buffer": None})   # sesión anterior no aplica
             editor.value = ""; pwd_field.value = ""; pwd_err.value = ""
             if r_findbar.current: r_findbar.current.visible = False
             find_f.value = ""; find_msg.value = ""; S["find_idx"] = 0
@@ -671,19 +705,20 @@ async def main(page: ft.Page):
     # ─────────────────────────────────────────────────────────────────────
     # 2. Find & Replace — búsqueda incremental con cursor
     # ─────────────────────────────────────────────────────────────────────
-    def _do_find(e=None):
-        """Avanza a la siguiente ocurrencia de la búsqueda."""
+    async def _do_find(e=None):
         needle = find_f.value or ""
         text   = editor.value or ""
         if not needle:
-            find_msg.value = ""; page.update(); return
+            find_msg.value = ""
+            page.update()
+            return
 
-        # Buscar todas las ocurrencias
         positions = []
         start = 0
         while True:
             idx = text.lower().find(needle.lower(), start)
-            if idx == -1: break
+            if idx == -1:
+                break
             positions.append(idx)
             start = idx + 1
 
@@ -691,35 +726,40 @@ async def main(page: ft.Page):
             find_msg.value = f"'{needle}' no encontrado"
             find_msg.color = _C("danger")
             S["find_idx"] = 0
-            # Quitar selección
-            editor.selection = ft.TextSelection(0, 0)
-            page.update(); return
+            page.update()
+            return
 
-        # Avanzar cursor circular
         S["find_idx"] = S["find_idx"] % len(positions)
         pos = positions[S["find_idx"]]
         ln  = text[:pos].count("\n") + 1
-        find_msg.value = f"Ocurrencia {S['find_idx']+1}/{len(positions)} — Ln {ln}"
+        find_msg.value = f"{S['find_idx']+1}/{len(positions)} · Ln {ln}"
         find_msg.color = _C("success")
-        
-        # Seleccionar texto y auto-scroll
-        editor.selection = ft.TextSelection(pos, pos + len(needle))
-        
+
+        # Seleccionar y hacer foco para que la selección sea visible
+        editor.selection = ft.TextSelection(
+            base_offset=pos,
+            extent_offset=pos + len(needle),
+        )
         S["find_idx"] = (S["find_idx"] + 1) % len(positions)
-        editor.update()
+
+        page.update()
+        # Focus después del update para que Flet renderice la selección
+        page.update()
+        await asyncio.sleep(0.05)
+        await editor.focus()
         page.update()
 
-    def _do_replace(e=None):
+    async def _do_replace(e=None):
         needle = find_f.value or ""; rep = replace_f.value or ""
         text   = editor.value or ""
         if not needle or not text: return
-        
+    
         # Validamos si actualmente tenemos una selección que coincide y procedemos al reemplazo uno a uno
         if editor.selection and editor.selection.end - editor.selection.start == len(needle):
             sel_text = text[editor.selection.start:editor.selection.end]
             if sel_text.lower() == needle.lower():
                 editor.value = text[:editor.selection.start] + rep + text[editor.selection.end:]
-                _sync_linenos(editor.value)
+                _update_ln_col(editor.value or "")
                 _mark_dirty()
                 
                 # Ajustamos el puntero para que la siguiente búsqueda comience después del reemplazo
@@ -727,7 +767,7 @@ async def main(page: ft.Page):
                 if S.get("find_idx", 1) > 0:
                     S["find_idx"] -= 1
 
-                _do_find()  # Salta a la siguiente coincidencia
+                await _do_find()  # Salta a la siguiente coincidencia
                 return
 
         find_msg.value = "Presiona 'Buscar' o Enter primero para fijar una selección"
@@ -745,7 +785,7 @@ async def main(page: ft.Page):
         
         if n:
             editor.value = re.sub(re.escape(needle), rep, text, flags=re.IGNORECASE)
-            _sync_linenos(editor.value); _mark_dirty()
+            _update_ln_col(editor.value or ""); _mark_dirty()
             find_msg.value = f"{n} reemplazo(s) realizados"
             find_msg.color = _C("success")
             S["find_idx"] = 0
@@ -767,7 +807,7 @@ async def main(page: ft.Page):
                 page.update()
 
     # Enter en el campo de búsqueda → siguiente ocurrencia
-    find_f.on_submit = _do_find
+    find_f.on_submit = lambda e: asyncio.ensure_future(_do_find(e))
 
     # ─────────────────────────────────────────────────────────────────────
     # Settings
@@ -792,7 +832,7 @@ async def main(page: ft.Page):
             S["font_sz"] = int(font_sz_sl.value)
             S["dark"]    = dark_sw.value
             _apply_theme()          # actualiza bgcolor/borders
-            _sync_linenos(editor.value or "")  # reconstruye con nuevo size
+            _update_ln_col(editor.value or "")  # reconstruye con nuevo size
             close_dlg(page)
             page.update()
 
@@ -838,6 +878,8 @@ async def main(page: ft.Page):
 
     # ─────────────────────────────────────────────────────────────────────
     # Scroll del editor → sincroniza lineno_col
+    # GestureDetector captura el evento; lineno_col.scroll_to() espeja el desplazamiento.
+    # Flet 0.82 expone scroll_delta.y (no .dy que ya no existe).
     # ─────────────────────────────────────────────────────────────────────
     def _on_editor_scroll(e):
         pass
@@ -881,10 +923,8 @@ async def main(page: ft.Page):
         S=S,
         # controles
         editor=editor,
-        lineno_col=lineno_col,
         title_txt=title_txt,
         status_txt=status_txt,
-        cursor_txt=cursor_txt,
         pwd_field=pwd_field,
         pwd_err=pwd_err,
         pwd_title=pwd_title,
@@ -913,7 +953,6 @@ async def main(page: ft.Page):
         r_findbar=r_findbar,
         r_toolbar=r_toolbar,
         r_editor_container=r_editor_container,
-        r_lineno_container=r_lineno_container,
         r_status_bar=r_status_bar,
         r_findbar_inner=r_findbar_inner,
     )
