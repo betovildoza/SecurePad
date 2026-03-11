@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Lock, FilePlus, ArrowRight, ShieldCheck, Fingerprint, Settings } from "lucide-react";
+import { Lock, FilePlus, ShieldCheck, Fingerprint, Settings } from "lucide-react";
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from "@tauri-apps/api/core";
 import { load } from '@tauri-apps/plugin-store';
@@ -209,13 +209,10 @@ export function Setup({ onUnlock, onNewVault }: SetupProps) {
             
             <button 
                 className="primary" 
-                style={{ padding: "12px", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}
+                style={{ padding: "12px", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "flex-start", gap: "0.5rem" }}
                 onClick={onNewVault}
             >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <FilePlus size={20} /> <span>Crear Nueva Bóveda</span>
-                </div>
-                <ArrowRight size={20} style={{ position: "absolute", right: "16px" }} />
+                <FilePlus size={20} /> <span style={{ textAlign: "left" }}>Crear Nueva Bóveda (.spd)</span>
             </button>
 
             <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -229,6 +226,13 @@ export function Setup({ onUnlock, onNewVault }: SetupProps) {
                 onClick={handleOpenExisting}
             >
                 <Lock size={20} /> <span style={{ textAlign: "left" }}>Abrir Bóveda Existente (.spd)</span>
+            </button>
+
+            <button 
+                style={{ padding: "12px", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "flex-start", gap: "0.5rem", background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                onClick={() => { setShowImportSeed(true); setImportError(""); setImportingSeed(""); }}
+            >
+                <Fingerprint size={20} /> <span style={{ textAlign: "left" }}>Tengo una Semilla (Importar)</span>
             </button>
 
             <button 

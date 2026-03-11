@@ -199,7 +199,8 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
       setUnlockError("");
       
       if (!currentFilePath) {
-          // Si no está guardado, no hay pass validada contra Rust fácil, solo destapamos
+          // Si es un archivo sin guardar, el bloqueo es puramente visual sobre el DOM.
+          // Flet simplemente retiraba el overlay.
           setIsLocked(false);
           setUnlockPassword("");
           return;
@@ -472,23 +473,42 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
       {isLocked && (
           <div style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "var(--bg)", zIndex: 1000, // Highest z-index to block everything
+              background: "rgba(0,0,0,0.85)", zIndex: 1000, 
               display: "flex", alignItems: "center", justifyContent: "center",
               backdropFilter: "blur(4px)"
           }}>
-              <motion.div 
-                  initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  style={{ textAlign: "center", width: "100%", maxWidth: "340px", padding: "2rem" }}
-              >
-                  <div style={{ 
-                      width: "64px", height: "64px", borderRadius: "50%", 
-                      background: "rgba(220, 53, 69, 0.1)", display: "flex", alignItems: "center", justifyContent: "center",
-                      margin: "0 auto 1.5rem auto", border: "1px solid var(--danger)"
-                  }}>
-                      <Lock size={32} color="var(--danger)" />
-                  </div>
-                  <h2 style={{ margin: "0 0 0.5rem 0" }}>Bóveda Bloqueada</h2>
-                  <p style={{ margin: "0 0 2rem 0", color: "var(--muted)", fontSize: "0.9rem" }}>La bóveda ha sido bloqueada por seguridad. Introduce tus credenciales para continuar.</p>
+              {!currentFilePath ? (
+                  <motion.div 
+                     initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                     style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}
+                  >
+                      <div style={{ 
+                          width: "35vh", height: "35vh", borderRadius: "50%", 
+                          background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "center",
+                          border: "1px solid var(--border)", boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+                      }}>
+                          <Lock size={"15vh"} color="var(--accent)" />
+                      </div>
+                      <h2 style={{ color: "white", margin: "1rem 0 0 0", fontSize: "1.5rem" }}>Documento Oculto</h2>
+                      <p style={{ color: "var(--muted)", margin: "0", maxWidth: "300px" }}>Este documento aún no ha sido guardado ni cifrado.</p>
+                      <button onClick={() => setIsLocked(false)} className="primary" style={{ padding: "12px 24px", marginTop: "1rem", fontSize: "1rem" }}>
+                          Regresar al Editor
+                      </button>
+                  </motion.div>
+              ) : (
+                  <motion.div 
+                      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      style={{ textAlign: "center", width: "100%", maxWidth: "340px", padding: "2rem", background: "var(--surface)", borderRadius: "12px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}
+                  >
+                      <div style={{ 
+                          width: "64px", height: "64px", borderRadius: "50%", 
+                          background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "center",
+                          margin: "0 auto 1.5rem auto", border: "1px solid var(--border)"
+                      }}>
+                          <Lock size={32} color="var(--accent)" />
+                      </div>
+                      <h2 style={{ margin: "0 0 0.5rem 0" }}>Bóveda Bloqueada</h2>
+                      <p style={{ margin: "0 0 2rem 0", color: "var(--muted)", fontSize: "0.9rem" }}>La bóveda ha sido bloqueada por seguridad. Introduce tus credenciales para continuar.</p>
                   
                   <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", background: "var(--surface)", padding: "4px", borderRadius: "8px", border: "1px solid var(--border)" }}>
                       <button 
@@ -556,11 +576,12 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
                           </button>
                       )}
                       
-                      <button type="button" onClick={onClose} style={{ padding: "12px", width: "100%", background: "transparent", color: "var(--muted)", border: "none" }}>
+                      <button type="button" onClick={onClose} style={{ padding: "12px", width: "100%", background: "transparent", color: "var(--danger)", border: "none" }}>
                           Cerrar Archivo Físicamente
                       </button>
                   </form>
-              </motion.div>
+                  </motion.div>
+              )}
           </div>
       )}
       </AnimatePresence>
