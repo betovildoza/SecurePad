@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -74,7 +77,9 @@ jobs:
       - name: Restore keystore (Optional for debug/unsigned if secret missing)
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > release.keystore
+            # Tratemamos de decodificar ignorando saltos de linea/basura (-i)
+            # o fallando suavemente si el secret no es un base64 válido para que no rompa el pipeline
+            echo "${{ secrets.ANDROID_KEYSTORE }}" | tr -d '\n\r' | base64 --decode > release.keystore || echo "Warning: ANDROID_KEYSTORE does not appear to be valid base64."
           else
             echo "ANDROID_KEYSTORE not found, skipping..."
           fi
