@@ -10,6 +10,26 @@
   </p>
 </div>
 
+## Why SecurePad?
+
+La mayoría de las herramientas para guardar información sensible dependen de la nube, cuentas online o servicios de terceros.
+SecurePad nace con una idea mucho más simple: **tus datos deberían pertenecer solo a vos.**
+
+SecurePad funciona completamente offline. No requiere cuentas, servidores ni sincronización obligatoria.
+Cada nota se guarda como un archivo `.spd` cifrado con **AES-256-GCM**, que solo puede abrirse con tu contraseña o tu semilla de recuperación.
+
+Esto significa que:
+
+* tus datos **no pasan por servidores externos**
+* **no hay cuentas que puedan ser hackeadas**
+* puedes mover tus archivos libremente entre dispositivos
+* tus notas siguen siendo **archivos portables y controlados por vos**
+
+SecurePad no intenta ser un gestor de contraseñas complejo ni una plataforma de productividad.
+Es simplemente **un bloc de notas cifrado, rápido y portátil**.
+
+A veces, lo más seguro es también lo más simple.
+
 ---
 
 ## 📥 Descargar
@@ -62,24 +82,13 @@ Esto reduce significativamente el consumo de memoria y mejora la velocidad del e
 
 ## 🖼️ Screenshots
 
-### Pantalla de Inicio
+### Pantalla de Inicio, Bloqueo y Configuracion
 
-<p align="center">
-  <img src="img/screenshot-inicio.png" width="750">
-</p>
-
-### Pantalla de Bloqueo
-
-<p align="center">
-  <img src="img/screenshot-bloqueo.png" width="750">
-</p>
-
-### Configuración
-
-<p align="center">
-  <img src="img/screenshot-settings.png" width="750">
-</p>
-
+<div display:"flex"> 
+<img src="img/screenshot-inicio.png" width="30%">
+<img src="img/screenshot-bloqueo.png" width="30%">
+<img src="img/screenshot-settings.png" width="30%">
+</div>
 ---
 
 ## 🛠️ Stack Tecnológico
