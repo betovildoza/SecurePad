@@ -49,6 +49,7 @@ rust-crash.log
 .env.*
 !.env.example
 
+
 # Android Keystores and sign configs
 *.jks
 *.keystore
@@ -60,6 +61,7 @@ keystore.properties
 src-tauri/gen/android/keystore.properties
 src-tauri/gen/android/key.properties
 src-tauri/gen/android/local.properties
+keystore.txt    
 
 # ------------------------------------------
 # 4. OS & Editor Generated
