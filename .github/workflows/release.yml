@@ -78,15 +78,16 @@ jobs:
         run: npm run tauri android build
 
       - name: Sign APK
-        uses: r0adkll/sign-android-release@v3
+        uses: r0adkll/sign-android-release@v1
         id: sign_app
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
         with:
           releaseDirectory: src-tauri/gen/android/app/build/outputs/apk/universal/release
           signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE }}
           alias: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEYSTORE_KEY_PASSWORD }}
-          buildToolsVersion: 34.0.0
 
       - name: Rename and Upload Android Artifacts
         run: |
