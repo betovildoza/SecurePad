@@ -1,4 +1,4 @@
-![Build](https://github.com/betovildoza/SecurePad/actions/workflows/build.yml/badge.svg)
+[![SecurePad Release](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml/badge.svg)](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml)
 
 <div align="center">
   <img src="src-tauri/icons/icon.png" alt="SecurePad Logo" width="128" />
