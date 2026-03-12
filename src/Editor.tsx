@@ -299,7 +299,7 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
 
       {/* STATUS BAR */}
       <div style={{
-          background: "var(--accent)", color: "white", padding: "4px 16px",
+          background: "var(--accent)", color: "white", padding: "8px 16px calc(8px + env(safe-area-inset-bottom, 0px)) 16px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: "500", zIndex: 10
       }}>

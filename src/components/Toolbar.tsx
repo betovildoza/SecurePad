@@ -12,7 +12,7 @@ export function Toolbar({ onNewVault, onOpenLocal, onSaveFlow, onToggleSettings,
   return (
     <div style={{ 
       display: "flex", alignItems: "center", justifyContent: "space-between", 
-      padding: "0.5rem 1rem", background: "var(--panel)", borderBottom: "1px solid var(--border)",
+      padding: "calc(0.5rem + env(safe-area-inset-top, 0px)) 1rem 0.5rem 1rem", background: "var(--panel)", borderBottom: "1px solid var(--border)",
       boxShadow: "0 2px 10px rgba(0,0,0,0.05)", zIndex: 10
     }}>
       {/* Lado Izquierdo */}

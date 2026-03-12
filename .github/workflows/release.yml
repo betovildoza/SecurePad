@@ -91,13 +91,13 @@ jobs:
 
       - name: Rename and Upload Android Artifacts
         run: |
-          mv ${{steps.sign_app.outputs.signedReleaseFile}} src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.0_Android.apk
+          mv ${{steps.sign_app.outputs.signedReleaseFile}} src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.1_Android.apk
       
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.0_Android.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.1_Android.apk
 
   release:
     needs: [build-windows, build-android]
