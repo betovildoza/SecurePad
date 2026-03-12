@@ -1,6 +1,7 @@
 import { Save, Lock, FilePlus, FolderOpen, Settings } from "lucide-react";
 
 interface ToolbarProps {
+  currentFilePath: string | null;
   onNewVault: () => void;
   onOpenLocal: () => void;
   onSaveFlow: () => void;
@@ -8,17 +9,36 @@ interface ToolbarProps {
   onClose: () => void;
 }
 
-export function Toolbar({ onNewVault, onOpenLocal, onSaveFlow, onToggleSettings, onClose }: ToolbarProps) {
+export function Toolbar({ currentFilePath, onNewVault, onOpenLocal, onSaveFlow, onToggleSettings, onClose }: ToolbarProps) {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 600;
+  const fileName = currentFilePath ? currentFilePath.split('\\').pop()?.split('/').pop() : "Sin título.spd";
+
   return (
     <div style={{ 
-      display: "flex", alignItems: "center", justifyContent: "space-between", 
-      padding: "calc(0.5rem + env(safe-area-inset-top, 0px)) 1rem 0.5rem 1rem", background: "var(--panel)", borderBottom: "1px solid var(--border)",
+      display: "flex", flexDirection: "column", 
+      background: "var(--panel)", borderBottom: "1px solid var(--border)",
       boxShadow: "0 2px 10px rgba(0,0,0,0.05)", zIndex: 10
     }}>
-      {/* Lado Izquierdo */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--muted)", fontSize: "0.85rem", fontWeight: "bold" }}>
-        SecurePad Editor
-      </div>
+      {/* Barra superior de título en móvil */}
+      {isMobile && (
+        <div style={{ 
+            background: "black", color: "white", textAlign: "center", 
+            paddingTop: "calc(0.25rem + env(safe-area-inset-top, 0px))", paddingBottom: "0.25rem",
+            fontSize: "0.8rem", width: "100%"
+        }}>
+          {fileName}
+        </div>
+      )}
+
+      {/* Toolbar Principal */}
+      <div style={{ 
+        display: "flex", alignItems: "center", justifyContent: "space-between", 
+        padding: isMobile ? "0.5rem 1rem" : "calc(0.5rem + env(safe-area-inset-top, 0px)) 1rem 0.5rem 1rem"
+      }}>
+        {/* Lado Izquierdo */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--muted)", fontSize: "0.85rem", fontWeight: "bold" }}>
+          SecurePad Editor
+        </div>
           
       {/* Lado Derecho (Botones de Acción y Configuración) */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -43,6 +63,7 @@ export function Toolbar({ onNewVault, onOpenLocal, onSaveFlow, onToggleSettings,
           <button className="icon-btn danger" title="Cerrar y Bloquear Bóveda" onClick={onClose} style={{ marginLeft: "0.25rem" }}>
               <Lock size={20} color="var(--bg)" />
           </button>
+      </div>
       </div>
     </div>
   );

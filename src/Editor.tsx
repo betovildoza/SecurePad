@@ -41,9 +41,10 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
   let inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Settings State
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 600;
   const [showSettings, setShowSettings] = useState(false);
-  const [wordWrap, setWordWrap] = useState(false);
-  const [fontSize, setFontSize] = useState(14);
+  const [wordWrap, setWordWrap] = useState(true);
+  const [fontSize, setFontSize] = useState(isMobile ? 20 : 14);
   const [fontFamily, setFontFamily] = useState("var(--font-mono)");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
@@ -248,6 +249,7 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100%", position: "relative" }}>
       
       <Toolbar 
+        currentFilePath={currentFilePath}
         onNewVault={onNewVault}
         onOpenLocal={handleOpenLocal}
         onSaveFlow={handleSaveFlow}
@@ -303,12 +305,12 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: "500", zIndex: 10
       }}>
-          <span>{currentFilePath ? currentFilePath.split('\\').pop()?.split('/').pop() : "Sin título.spd"}</span>
-          <div style={{ display: "flex", gap: "1.5rem" }}>
-              <span style={{ cursor: "pointer" }} onClick={() => setWordWrap(!wordWrap)} title="Alt+Z">{wordWrap ? "Word Wrap: ON" : "Word Wrap: OFF"}</span>
+          {!isMobile && <span>{currentFilePath ? currentFilePath.split('\\').pop()?.split('/').pop() : "Sin título.spd"}</span>}
+          <div style={{ display: "flex", gap: "1.5rem", width: isMobile ? "100%" : "auto", justifyContent: isMobile ? "center" : "flex-end" }}>
+              {!isMobile && <span style={{ cursor: "pointer" }} onClick={() => setWordWrap(!wordWrap)} title="Alt+Z">{wordWrap ? "Word Wrap: ON" : "Word Wrap: OFF"}</span>}
               <span>AES-256-GCM Protegido</span>
               <span>UTF-8</span>
-              <span>{content.length} bytes</span>
+              {!isMobile && <span>{content.length} bytes</span>}
           </div>
       </div>
 
