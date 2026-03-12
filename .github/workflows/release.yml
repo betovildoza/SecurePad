@@ -77,21 +77,33 @@ jobs:
       - name: Build Android APK
         run: npm run tauri android build
 
-      - name: Sign APK
-        uses: r0adkll/sign-android-release@v1
-        id: sign_app
+      - name: Align and Sign APK
         env:
-          BUILD_TOOLS_VERSION: "34.0.0"
-        with:
-          releaseDirectory: src-tauri/gen/android/app/build/outputs/apk/universal/release
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE }}
-          alias: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEYSTORE_KEY_PASSWORD }}
-
-      - name: Rename and Upload Android Artifacts
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE }}
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_KEY_PASSWORD }}
         run: |
-          mv ${{steps.sign_app.outputs.signedReleaseFile}} src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.1_Android.apk
+          # 1. Decodificar la keystore
+          echo $KEYSTORE_BASE64 | tr -d '\n\r' | base64 --decode > release.keystore
+          
+          # 2. Definir variables
+          APK_PATH="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk"
+          ALIGNED_APK="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-aligned.apk"
+          SIGNED_APK="src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.1_Android.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+
+          # 3. Zipalign (alinear APK)
+          $BUILD_TOOLS/zipalign -v -p 4 $APK_PATH $ALIGNED_APK
+
+          # 4. Apksigner (firmar APK)
+          $BUILD_TOOLS/apksigner sign \
+            --ks release.keystore \
+            --ks-key-alias $KEYSTORE_ALIAS \
+            --ks-pass pass:$KEYSTORE_PASSWORD \
+            --key-pass pass:$KEY_PASSWORD \
+            --out $SIGNED_APK \
+            $ALIGNED_APK
       
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
