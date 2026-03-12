@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src-tauri/icons/icon.png" alt="SecurePad Logo" width="128" />
   <h1>SecurePad v2</h1>
-  <p><strong>Bóveda Criptográfica Ultraligera.</strong> <br> Protege tus textos y códigos con cifrado de grado militar (AES-256-GCM) sin depender de la nube.</p>
+  <p><strong>Bóveda Criptográfica Ultraligera.</strong> <br> Protege tus textos y códigos con cifrado AES-256-GCM sin depender de la nube.</p>
 </div>
 
 ---
