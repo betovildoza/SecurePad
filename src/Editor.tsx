@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs"; // IMPORTANTE: file-saver en JS
 import CodeMirror, { EditorView } from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -106,9 +107,14 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
     try {
       let targetPath = currentFilePath;
       if (!targetPath) {
-        const selectedPath = await save({ filters: [{ name: 'SecurePad Vault', extensions: ['spd'] }] });
+        let selectedPath = await save({ filters: [{ name: 'SecurePad Vault', extensions: ['spd'] }] });
         if (!selectedPath) { setIsSaving(false); return; }
-        targetPath = selectedPath;
+        
+        // Android fix: Ensure .spd extension is present, save dialog might not append it automatically
+        if (typeof selectedPath === 'string' && !selectedPath.toLowerCase().endsWith('.spd')) {
+            selectedPath += '.spd';
+        }
+        targetPath = selectedPath as string;
       }
 
       let currentSeed = generatedSeed;
@@ -116,13 +122,17 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
           currentSeed = await invoke<string>("generate_seed");
       }
 
-      await invoke("encrypt_note", {
+      // 1. Invocar a Rust para cifrar y devolver un array de bytes
+      const encryptedBytesArray: number[] = await invoke("encrypt_note", {
         plaintext: content,
         password: password,
         // Tauri TS bindings require camelCase by default matching Rust struct #[serde(rename_all = "camelCase")]
-        seedPhrase: currentSeed || "dummy-seed-for-existing-file-not-used-but-needed-by-api",
-        filePath: targetPath 
+        seedPhrase: currentSeed || "dummy-seed-for-existing-file-not-used-but-needed-by-api"
       });
+
+      // 2. Usar API de FS de Javascript para guardar en disco real o URI en Android
+      const fileBytes = new Uint8Array(encryptedBytesArray);
+      await writeFile(targetPath, fileBytes);
 
       setCurrentFilePath(targetPath);
       setShowSaveModal(false);
@@ -212,18 +222,23 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
       }
 
       try {
+          // 1. Array de bytes leído a través de js (fundamental para content:// android URI)
+          const fileBytes = await readFile(currentFilePath);
+          
           if (unlockMode === "RESET_SEED" && currentFilePath) {
-              // Validar contraseña primero
-              await invoke("decrypt_note", { filePath: currentFilePath, password: unlockPassword });
+              // Validar contraseña primero usando JSON serialization
+              await invoke("decrypt_note", { fileBytes: Array.from(fileBytes), password: unlockPassword });
               
               // Si fue exitosa, generar nueva semilla y re-cifrar
               const newSeed = await invoke<string>("generate_seed");
-              await invoke("encrypt_note", {
+              const encryptedBytesArr: number[] = await invoke("encrypt_note", {
                   plaintext: content,
                   password: unlockPassword,
-                  seedPhrase: newSeed,
-                  filePath: currentFilePath 
+                  seedPhrase: newSeed
               });
+              
+              const newBytes = new Uint8Array(encryptedBytesArr);
+              await writeFile(currentFilePath, newBytes);
               
               setNewGeneratedSeed(newSeed);
               setUnlockError("¡Semilla actualizada con éxito! Guárdala en un lugar seguro.");
@@ -231,9 +246,9 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
           }
 
           if (unlockMode === "PASSWORD") {
-             await invoke("decrypt_note", { filePath: currentFilePath, password: unlockPassword });
+             await invoke("decrypt_note", { fileBytes: Array.from(fileBytes), password: unlockPassword });
           } else if (unlockMode === "SEED") {
-             await invoke("decrypt_seed", { filePath: currentFilePath, seedPhrase: unlockSeed.trim() });
+             await invoke("decrypt_seed", { fileBytes: Array.from(fileBytes), seedPhrase: unlockSeed.trim() });
           }
           
           setIsLocked(false);

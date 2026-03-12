@@ -72,7 +72,11 @@ pub fn generate_seed_phrase() -> String {
 }
 
 pub fn validate_seed_phrase(phrase: &str) -> bool {
-    Mnemonic::parse_in_normalized(bip39::Language::English, phrase.trim().to_lowercase().as_str()).is_ok()
+    Mnemonic::parse_in_normalized(
+        bip39::Language::English,
+        phrase.trim().to_lowercase().as_str(),
+    )
+    .is_ok()
 }
 
 pub fn encrypt_content(
@@ -289,8 +293,8 @@ mod tests {
         let text = "Important credentials here";
         let seed = generate_seed_phrase();
         let (mut fb, _) = encrypt_content(text, "mypassword", &seed).unwrap();
-        
-        let last_idx = fb.len() - KEY_LEN - 1; 
+
+        let last_idx = fb.len() - KEY_LEN - 1;
         fb[last_idx] ^= 0xFF; // Tamper ciphertext
 
         let err = decrypt_content(&fb, "mypassword").unwrap_err();
@@ -305,7 +309,7 @@ mod tests {
         let seed = generate_seed_phrase();
         let (mut fb, _) = encrypt_content("data", "pass", &seed).unwrap();
         fb[OFF_TAG] ^= 0xAB;
-        
+
         let err = decrypt_content(&fb, "pass").unwrap_err();
         match err {
             SecurityError::InvalidTag => (),
@@ -365,7 +369,7 @@ mod tests {
         let seed2 = generate_seed_phrase();
 
         let (fb, _) = encrypt_content(text, pwd, &seed1).unwrap();
-        
+
         let err = decrypt_with_seed(&fb, &seed2).unwrap_err();
         match err {
             SecurityError::InvalidTag => (),

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Lock, ArrowLeft, KeyRound } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { readFile } from "@tauri-apps/plugin-fs"; // IMPORTANTE: Agregado
 
 interface UnlockProps {
   filePath: string;
@@ -29,16 +30,19 @@ export function Unlock({ filePath, onUnlocked, onCancel }: UnlockProps) {
 
     try {
       let decryptedContent = "";
-      // 1. Invocar a Rust para leer y descifrar el contenido directamente desde disco
-      // Send camelCase property to Tauri plugin (filePath -> file_path)
+      
+      // 1. Leer archivo usando API nativa de Tauri en JS (Evita OS error 2 en Android)
+      const fileBytes = await readFile(filePath);
+      
+      // 2. Pasar bytes a Rust
       if (unlockMode === "PASSWORD") {
           decryptedContent = await invoke<string>("decrypt_note", { 
-            filePath: filePath, 
+            fileBytes: Array.from(fileBytes), // Convertimos Uint8Array a array simple por seguridad en serialization IPC
             password: password 
           });
       } else {
           decryptedContent = await invoke<string>("decrypt_seed", { 
-            filePath: filePath, 
+            fileBytes: Array.from(fileBytes), 
             seedPhrase: seedPhrase.trim() 
           });
       }
