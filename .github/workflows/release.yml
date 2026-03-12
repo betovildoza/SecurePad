@@ -74,27 +74,24 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Restore keystore (Optional for debug/unsigned if secret missing)
-        run: |
-          if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
-            # Tratemamos de decodificar ignorando saltos de linea/basura (-i)
-            # o fallando suavemente si el secret no es un base64 válido para que no rompa el pipeline
-            echo "${{ secrets.ANDROID_KEYSTORE }}" | tr -d '\n\r' | base64 --decode > release.keystore || echo "Warning: ANDROID_KEYSTORE does not appear to be valid base64."
-          else
-            echo "ANDROID_KEYSTORE not found, skipping..."
-          fi
-        shell: bash
-
       - name: Build Android APK
-        run: |
-          npm run tauri android build
-        # Nota: Puedes agregar -- --apk si estás forzando la creación de apk en Tauri v2.
+        run: npm run tauri android build
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: src-tauri/gen/android/app/build/outputs/apk/universal/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE }}
+          alias: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEYSTORE_KEY_PASSWORD }}
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}
 
   release:
     needs: [build-windows, build-android]

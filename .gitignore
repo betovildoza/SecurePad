@@ -61,7 +61,8 @@ keystore.properties
 src-tauri/gen/android/keystore.properties
 src-tauri/gen/android/key.properties
 src-tauri/gen/android/local.properties
-keystore.txt    
+keystore.txt
+keystore_base64.txt
 
 # ------------------------------------------
 # 4. OS & Editor Generated
