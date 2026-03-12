@@ -1,83 +1,109 @@
-name: Build SecurePad
+name: SecurePad Release
 
 on:
-push:
-tags:
-- "v*"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 permissions:
-contents: write
+  contents: write
 
 jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-build-windows:
-runs-on: windows-latest
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-```
-steps:
-  - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
 
-  - uses: actions/setup-node@v4
-    with:
-      node-version: 20
+      - name: Install frontend dependencies
+        run: npm install
 
-  - uses: dtolnay/rust-toolchain@stable
+      - name: Build Windows App
+        run: npm run tauri build
 
-  - name: Install dependencies
-    run: npm install
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: src-tauri/target/release/bundle/
 
-  - name: Build Windows
-    run: npm run tauri build
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - name: Upload Windows files
-    uses: softprops/action-gh-release@v2
-    with:
-      files: |
-        src-tauri/target/release/bundle/**/*.exe
-        src-tauri/target/release/bundle/**/*.msi
-```
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-build-android:
-runs-on: ubuntu-latest
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-```
-steps:
-  - uses: actions/checkout@v4
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-  - uses: actions/setup-node@v4
-    with:
-      node-version: 20
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
-  - uses: dtolnay/rust-toolchain@stable
+      - name: Install OS Dependencies (Tauri Linux requirements)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
-  - name: Install dependencies
-    run: npm install
+      - name: Install frontend dependencies
+        run: npm install
 
-  - uses: android-actions/setup-android@v3
+      - name: Restore keystore (Optional for debug/unsigned if secret missing)
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > release.keystore
+          else
+            echo "ANDROID_KEYSTORE not found, skipping..."
+          fi
+        shell: bash
 
-  - name: Restore keystore
-    run: |
-      echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > release.keystore
+      - name: Build Android APK
+        run: |
+          npm run tauri android build
+        # Nota: Puedes agregar -- --apk si estás forzando la creación de apk en Tauri v2.
 
-  - name: Init Android
-    run: npm run tauri android init
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 
-  - name: Build APK
-    run: npm run tauri android build
+  release:
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
 
-  - name: Sign APK
-    run: |
-      jarsigner \
-      -keystore release.keystore \
-      -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-      -keypass ${{ secrets.ANDROID_KEY_PASSWORD }} \
-      src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk \
-      ${{ secrets.ANDROID_KEY_ALIAS }}
-
-  - name: Upload APK
-    uses: softprops/action-gh-release@v2
-    with:
-      files: |
-        src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
-```
-        
+      - name: Publish Release to Github
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            windows-build/**/*.exe
+            windows-build/**/*.msi
+            android-build/**/*.apk
