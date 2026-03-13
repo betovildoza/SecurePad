@@ -1,8 +1,35 @@
-[![SecurePad Release](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml/badge.svg)](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml) 
 
 <div align="center">
-  <img src="src-tauri/icons/icon.png" alt="SecurePad Logo" width="128" />
+  <img src="https://raw.githubusercontent.com/betovildoza/SecurePad/main/src-tauri/icons/icon.png" alt="SecurePad Logo" width="128" />
   <h1>SecurePad v2</h1>
+
+  [![SecurePad Release](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml/badge.svg)](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml)
+  [![GitHub license](https://img.shields.io/github/license/betovildoza/SecurePad?style=flat-square)](https://github.com/betovildoza/SecurePad/blob/main/LICENSE)
+  [![GitHub release](https://img.shields.io/github/v/release/betovildoza/SecurePad?style=flat-square&color=green&logo=github)](https://github.com/betovildoza/SecurePad/releases/latest)
+  [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/betovildoza/SecurePad/release.yml?branch=main&style=flat-square&logo=github&label=Release%20CI)](https://github.com/betovildoza/SecurePad/actions/workflows/release.yml)
+  [![GitHub stars](https://img.shields.io/github/stars/betovildoza/SecurePad?style=flat-square&color=yellow&logo=github)](https://github.com/betovildoza/SecurePad/stargazers)
+  [![GitHub forks](https://img.shields.io/github/forks/betovildoza/SecurePad?style=flat-square&logo=github)](https://github.com/betovildoza/SecurePad/network/members)
+
+  [![Rust](https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://react.dev/)
+  [![Tauri](https://img.shields.io/badge/Tauri-24C8D9?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app/)
+  [![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+
+  ![AES-256-GCM](https://img.shields.io/badge/AES--256--GCM-encrypted-blue?style=flat-square&logo=lock&logoColor=white)
+  ![Offline-first](https://img.shields.io/badge/Offline--first-2ecc71?style=flat-square&logo=lock&logoColor=white)
+  ![No Cloud](https://img.shields.io/badge/No%20Cloud-000000?style=flat-square&logo=ghost&logoColor=white)
+
+  ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)
+  ![Android](https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white)
+
+</div>
+
+**Minimal encrypted notes.**  
+Protege tus textos y códigos con cifrado AES-256-GCM sin depender de la nube. Sin cuentas. Solo tus llaves.
+
+
+# SecurePad v2
   <p>
     <strong>Minimal encrypted notes.</strong><br>
     Protege tus textos y códigos con cifrado AES-256-GCM.<br>
