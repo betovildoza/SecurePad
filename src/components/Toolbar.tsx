@@ -11,7 +11,10 @@ interface ToolbarProps {
 
 export function Toolbar({ currentFilePath, onNewVault, onOpenLocal, onSaveFlow, onToggleSettings, onClose }: ToolbarProps) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 600;
-  const fileName = currentFilePath ? currentFilePath.split('\\').pop()?.split('/').pop() : "Sin título.spd";
+  const fileName = currentFilePath ? (function() {
+      const raw = currentFilePath.split('\\').pop()?.split('/').pop() || "Sin título.spd";
+      try { return decodeURIComponent(raw); } catch { return raw; }
+  })() : "Sin título.spd";
 
   return (
     <div style={{ 

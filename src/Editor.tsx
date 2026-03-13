@@ -320,7 +320,10 @@ export function Editor({ initialContent, filePath, onClose, onNewVault, onOpenVa
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: "500", zIndex: 10
       }}>
-          {!isMobile && <span>{currentFilePath ? currentFilePath.split('\\').pop()?.split('/').pop() : "Sin título.spd"}</span>}
+          {!isMobile && <span>{currentFilePath ? (function() {
+              const raw = currentFilePath.split('\\').pop()?.split('/').pop() || "Sin título.spd";
+              try { return decodeURIComponent(raw); } catch { return raw; }
+          })() : "Sin título.spd"}</span>}
           <div style={{ display: "flex", gap: "1.5rem", width: isMobile ? "100%" : "auto", justifyContent: isMobile ? "center" : "flex-end" }}>
               {!isMobile && <span style={{ cursor: "pointer" }} onClick={() => setWordWrap(!wordWrap)} title="Alt+Z">{wordWrap ? "Word Wrap: ON" : "Word Wrap: OFF"}</span>}
               <span>AES-256-GCM Protegido</span>

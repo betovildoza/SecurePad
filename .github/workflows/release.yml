@@ -90,7 +90,7 @@ jobs:
           # 2. Definir variables
           APK_PATH="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk"
           ALIGNED_APK="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-aligned.apk"
-          SIGNED_APK="src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.3_Android.apk"
+          SIGNED_APK="src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.4_Android.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
 
           # 3. Zipalign (alinear APK)
@@ -109,7 +109,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-build
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.3_Android.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/SecurePad_2.0.4_Android.apk
 
   release:
     needs: [build-windows, build-android]

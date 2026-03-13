@@ -248,7 +248,7 @@ export function Setup({ onUnlock, onNewVault }: SetupProps) {
       )}
       
       <p style={{ textAlign: "center", color: "var(--muted)", fontSize: "0.8rem", marginTop: "1rem" }}>
-        v2.0.0 • Rust Core
+        v2.0.4 • Rust Core
       </p>
 
     </motion.div>

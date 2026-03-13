@@ -18,7 +18,10 @@ export function Unlock({ filePath, onUnlocked, onCancel }: UnlockProps) {
   const [loading, setLoading] = useState(false);
 
   // Extraer solo el nombre del archivo para mostrar
-  const fileName = filePath.split('\\').pop()?.split('/').pop() || filePath;
+  const fileName = (function() {
+      const raw = filePath.split('\\').pop()?.split('/').pop() || filePath;
+      try { return decodeURIComponent(raw); } catch { return raw; }
+  })();
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
